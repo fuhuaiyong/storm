@@ -31,6 +31,7 @@ import org.slf4j.LoggerFactory;
 import javax.xml.bind.DatatypeConverter;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -49,7 +50,7 @@ public abstract class AbstractHadoopNimbusPluginAutoCreds
     }
 
     @Override
-    public void populateCredentials(Map<String, String> credentials, Map<String, Object> topologyConf) {
+    public void populateCredentials(Map<String, String> credentials, Map<String, Object> topologyConf, final String topologyOwnerPrincipal) {
         try {
             List<String> configKeys = getConfigKeys(topologyConf);
             if (!configKeys.isEmpty()) {
@@ -59,7 +60,7 @@ public abstract class AbstractHadoopNimbusPluginAutoCreds
                 }
             } else {
                 credentials.put(getCredentialKey(StringUtils.EMPTY),
-                        DatatypeConverter.printBase64Binary(getHadoopCredentials(topologyConf)));
+                        DatatypeConverter.printBase64Binary(getHadoopCredentials(topologyConf, topologyOwnerPrincipal)));
             }
             LOG.info("Tokens added to credentials map.");
         } catch (Exception e) {
@@ -68,8 +69,8 @@ public abstract class AbstractHadoopNimbusPluginAutoCreds
     }
 
     @Override
-    public void renew(Map<String, String> credentials, Map<String, Object> topologyConf) {
-        doRenew(credentials, topologyConf);
+    public void renew(Map<String, String> credentials, Map<String, Object> topologyConf, final String topologyOwnerPrincipal) {
+        doRenew(credentials, topologyConf, topologyOwnerPrincipal);
     }
 
     protected Set<Pair<String, Credentials>> getCredentials(Map<String, String> credentials,
@@ -113,15 +114,16 @@ public abstract class AbstractHadoopNimbusPluginAutoCreds
      */
     protected abstract String getConfigKeyString();
 
-    protected abstract byte[] getHadoopCredentials(Map topologyConf, String configKey);
+    protected abstract byte[] getHadoopCredentials(Map topologyConf, String configKey, final String topologyOwnerPrincipal);
 
-    protected abstract byte[] getHadoopCredentials(Map topologyConf);
+    protected abstract byte[] getHadoopCredentials(Map topologyConf, final String topologyOwnerPrincipal);
 
-    protected abstract void doRenew(Map<String, String> credentials, Map topologyConf);
+    protected abstract void doRenew(Map<String, String> credentials, Map topologyConf, final String topologyOwnerPrincipal);
 
     protected List<String> getConfigKeys(Map conf) {
         String configKeyString = getConfigKeyString();
-        return (List<String>) conf.get(configKeyString);
+        List<String> configKeys = (List<String>) conf.get(configKeyString);
+        return configKeys != null ? configKeys : Collections.emptyList();
     }
 
 }

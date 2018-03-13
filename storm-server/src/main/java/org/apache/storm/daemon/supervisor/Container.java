@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.storm.daemon.supervisor;
 
 import java.io.BufferedReader;
@@ -31,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.apache.storm.Config;
 import org.apache.storm.DaemonConfig;
@@ -38,10 +40,19 @@ import org.apache.storm.container.ResourceIsolationInterface;
 import org.apache.storm.generated.LSWorkerHeartbeat;
 import org.apache.storm.generated.LocalAssignment;
 import org.apache.storm.generated.ProfileRequest;
+import org.apache.storm.generated.WorkerMetricPoint;
+import org.apache.storm.generated.WorkerMetricList;
+import org.apache.storm.generated.WorkerMetrics;
+import org.apache.storm.metric.StormMetricsRegistry;
+import org.apache.storm.metricstore.MetricException;
+import org.apache.storm.metricstore.WorkerMetricsProcessor;
 import org.apache.storm.utils.ConfigUtils;
+import org.apache.storm.utils.LocalState;
+import org.apache.storm.utils.NimbusClient;
 import org.apache.storm.utils.ServerConfigUtils;
 import org.apache.storm.utils.ServerUtils;
-import org.apache.storm.utils.LocalState;
+import org.apache.storm.utils.Utils;
+import org.apache.thrift.TException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
@@ -51,6 +62,11 @@ import org.yaml.snakeyaml.Yaml;
  */
 public abstract class Container implements Killable {
     private static final Logger LOG = LoggerFactory.getLogger(Container.class);
+    private static final String MEMORY_USED_METRIC = "UsedMemory";
+    private static final String SYSTEM_COMPONENT_ID = "System";
+    private static final String INVALID_EXECUTOR_ID = "-1";
+    private static final String INVALID_STREAM_ID = "None";
+
     public static enum ContainerType {
         LAUNCH(false, false),
         RECOVER_FULL(true, false),
@@ -78,6 +94,51 @@ public abstract class Container implements Killable {
             return _onlyKillable;
         }
     }
+
+    private static class TopoAndMemory {
+        public final String topoId;
+        public final long memory;
+
+        public TopoAndMemory(String id, long mem) {
+            topoId = id;
+            memory = mem;
+        }
+
+        @Override
+        public String toString() {
+            return "{TOPO: " + topoId + " at " + memory + " MB}";
+        }
+    }
+
+    private static final ConcurrentHashMap<Integer, TopoAndMemory> _usedMemory =
+        new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<Integer, TopoAndMemory> _reservedMemory =
+        new ConcurrentHashMap<>();
+
+    static {
+        StormMetricsRegistry.registerGauge(
+            "supervisor:current-used-memory-mb",
+            () -> {
+                Long val =
+                    _usedMemory.values().stream().mapToLong((topoAndMem) -> topoAndMem.memory).sum();
+                int ret = val.intValue();
+                if (val > Integer.MAX_VALUE) { // Would only happen at 2 PB so we are OK for now
+                    ret = Integer.MAX_VALUE;
+                }
+                return ret;
+            });
+        StormMetricsRegistry.registerGauge(
+            "supervisor:current-reserved-memory-mb",
+            () -> {
+                Long val =
+                    _reservedMemory.values().stream().mapToLong((topoAndMem) -> topoAndMem.memory).sum();
+                int ret = val.intValue();
+                if (val > Integer.MAX_VALUE) { // Would only happen at 2 PB so we are OK for now
+                    ret = Integer.MAX_VALUE;
+                }
+                return ret;
+            });
+    }
     
     protected final Map<String, Object> _conf;
     protected final Map<String, Object> _topoConf; //Not set if RECOVER_PARTIAL
@@ -90,6 +151,7 @@ public abstract class Container implements Killable {
     protected final ResourceIsolationInterface _resourceIsolationManager;
     protected ContainerType _type;
     protected final boolean _symlinksDisabled;
+    private long lastMetricProcessTime = 0L;
 
     /**
      * Create a new Container.
@@ -162,7 +224,7 @@ public abstract class Container implements Killable {
     }
     
     /**
-     * Kill a given process
+     * Kill a given process.
      * @param pid the id of the process to kill
      * @throws IOException
      */
@@ -171,7 +233,7 @@ public abstract class Container implements Killable {
     }
     
     /**
-     * Kill a given process
+     * Kill a given process.
      * @param pid the id of the process to kill
      * @throws IOException
      */
@@ -212,7 +274,7 @@ public abstract class Container implements Killable {
     }
 
     /**
-     * Is a process alive and running?
+     * Is a process alive and running?.
      * @param pid the PID of the running process
      * @param user the user that is expected to own that process
      * @return true if it is, else false
@@ -295,6 +357,8 @@ public abstract class Container implements Killable {
 
     @Override
     public void cleanUp() throws IOException {
+        _usedMemory.remove(_port);
+        _reservedMemory.remove(_port);
         cleanUpForRestart();
     }
     
@@ -321,7 +385,7 @@ public abstract class Container implements Killable {
         File workerArtifacts = new File(ConfigUtils.workerArtifactsRoot(_conf, _topologyId, _port));
         if (!_ops.fileExists(workerArtifacts)) {
             _ops.forceMkdir(workerArtifacts);
-            _ops.setupWorkerArtifactsDir(_topoConf, workerArtifacts);
+            _ops.setupWorkerArtifactsDir(_assignment.get_owner(), workerArtifacts);
         }
     
         String user = getWorkerUser();
@@ -332,7 +396,7 @@ public abstract class Container implements Killable {
     }
     
     /**
-     * Write out the file used by the log viewer to allow/reject log access
+     * Write out the file used by the log viewer to allow/reject log access.
      * @param user the user this is going to run as
      * @throws IOException on any error
      */
@@ -380,7 +444,7 @@ public abstract class Container implements Killable {
     }
     
     /**
-     * Create symlink from the containers directory/artifacts to the artifacts directory
+     * Create symlink from the containers directory/artifacts to the artifacts directory.
      * @throws IOException on any error
      */
     protected void createArtifactsLink() throws IOException {
@@ -454,7 +518,7 @@ public abstract class Container implements Killable {
         }
         
         if (_resourceIsolationManager != null) {
-            Set<Long> morePids = _resourceIsolationManager.getRunningPIDs(_workerId);
+            Set<Long> morePids = _resourceIsolationManager.getRunningPids(_workerId);
             assert(morePids != null);
             ret.addAll(morePids);
         }
@@ -472,8 +536,8 @@ public abstract class Container implements Killable {
 
         if (_ops.fileExists(file)) {
             return _ops.slurpString(file).trim();
-        } else if (_topoConf != null) { 
-            return (String) _topoConf.get(Config.TOPOLOGY_SUBMITTER_USER);
+        } else if (_assignment != null && _assignment.is_set_owner()) {
+            return _assignment.get_owner();
         }
         if (ConfigUtils.isLocalMode(_conf)) {
             return System.getProperty("user.name");
@@ -528,28 +592,108 @@ public abstract class Container implements Killable {
         deleteSavedWorkerUser();
         _workerId = null;
     }
-    
+
     /**
-     * Launch the process for the first time
+     * Check if the container is over its memory limit AND needs to be killed. This does not necessarily mean
+     * that it just went over the limit.
+     * @throws IOException on any error
+     */
+    public boolean isMemoryLimitViolated(LocalAssignment withUpdatedLimits) throws IOException {
+        updateMemoryAccounting();
+        return false;
+    }
+
+    protected void updateMemoryAccounting() {
+        _type.assertFull();
+        long used = getMemoryUsageMb();
+        long reserved = getMemoryReservationMb();
+        _usedMemory.put(_port, new TopoAndMemory(_topologyId, used));
+        _reservedMemory.put(_port, new TopoAndMemory(_topologyId, reserved));
+    }
+
+    /**
+     * Get the total memory used (on and off heap).
+     */
+    public long getTotalTopologyMemoryUsed() {
+        updateMemoryAccounting();
+        return _usedMemory
+            .values()
+            .stream()
+            .filter((topoAndMem) -> _topologyId.equals(topoAndMem.topoId))
+            .mapToLong((topoAndMem) -> topoAndMem.memory)
+            .sum();
+    }
+
+    /**
+     * Get the total memory reserved.
+     *
+     * @param withUpdatedLimits the local assignment with shared memory
+     * @return the total memory reserved.
+     */
+    public long getTotalTopologyMemoryReserved(LocalAssignment withUpdatedLimits) {
+        updateMemoryAccounting();
+        long ret =
+            _reservedMemory
+                .values()
+                .stream()
+                .filter((topoAndMem) -> _topologyId.equals(topoAndMem.topoId))
+                .mapToLong((topoAndMem) -> topoAndMem.memory)
+                .sum();
+        if (withUpdatedLimits.is_set_total_node_shared()) {
+            ret += withUpdatedLimits.get_total_node_shared();
+        }
+        return ret;
+    }
+
+    /**
+     * Get the number of workers for this topology.
+     */
+    public long getTotalWorkersForThisTopology() {
+        return _usedMemory
+            .values()
+            .stream()
+            .filter((topoAndMem) -> _topologyId.equals(topoAndMem.topoId))
+            .count();
+    }
+
+    /**
+     * Get the current memory usage of this container.
+     */
+    public long getMemoryUsageMb() {
+        return 0;
+    }
+
+    /**
+     * Get the current memory reservation of this container.
+     */
+    public long getMemoryReservationMb() {
+        return 0;
+    }
+
+    /**
+     * Launch the process for the first time.
      * PREREQUISITE: setup has run and passed
+     *
      * @throws IOException on any error
      */
     public abstract void launch() throws IOException;
-    
+
     /**
-     * Restart the processes in this container
+     * Restart the processes in this container.
      * PREREQUISITE: cleanUpForRestart has run and passed
+     *
      * @throws IOException on any error
      */
     public abstract void relaunch() throws IOException;
 
     /**
-     * @return true if the main process exited, else false. This is just best effort return false if unknown.
+     * Return true if the main process exited, else false. This is just best effort return false if unknown.
      */
     public abstract boolean didMainProcessExit();
 
     /**
-     * Run a profiling request
+     * Run a profiling request.
+     *
      * @param request the request to run
      * @param stop is this a stop request?
      * @return true if it succeeded, else false
@@ -559,9 +703,49 @@ public abstract class Container implements Killable {
     public abstract boolean runProfiling(ProfileRequest request, boolean stop) throws IOException, InterruptedException;
 
     /**
-     * @return the id of the container or null if there is no worker id right now.
+     * Get the id of the container or null if there is no worker id right now.
      */
     public String getWorkerId() {
         return _workerId;
+    }
+
+    /**
+     * Send worker metrics to Nimbus.
+     */
+    void processMetrics(OnlyLatestExecutor<Integer> exec, WorkerMetricsProcessor processor) {
+        try {
+            if (_usedMemory.get(_port) != null) {
+                // Make sure we don't process too frequently.
+                long nextMetricProcessTime = this.lastMetricProcessTime + 60L * 1000L;
+                long currentTimeMsec = System.currentTimeMillis();
+                if (currentTimeMsec < nextMetricProcessTime) {
+                    return;
+                }
+
+                String hostname = Utils.hostname();
+
+                // create metric for memory
+                long timestamp = System.currentTimeMillis();
+                double value = _usedMemory.get(_port).memory;
+                WorkerMetricPoint workerMetric = new WorkerMetricPoint(MEMORY_USED_METRIC, timestamp, value, SYSTEM_COMPONENT_ID,
+                    INVALID_EXECUTOR_ID, INVALID_STREAM_ID);
+
+                WorkerMetricList metricList = new WorkerMetricList();
+                metricList.add_to_metrics(workerMetric);
+                WorkerMetrics metrics = new WorkerMetrics(_topologyId, _port, hostname, metricList);
+
+                exec.execute(_port, () -> {
+                    try {
+                        processor.processWorkerMetrics(_conf, metrics);
+                    } catch (MetricException e) {
+                        LOG.error("Failed to process metrics", e);
+                    }
+                });
+            }
+        } catch (Exception e) {
+            LOG.error("Failed to process metrics", e);
+        } finally {
+            this.lastMetricProcessTime = System.currentTimeMillis();
+        }
     }
 }

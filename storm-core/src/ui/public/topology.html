@@ -92,6 +92,9 @@
   <div class="row">
     <div id="json-response-error" class="col-md-12"></div>
   </div>
+  <div>
+    <p id="page-rendered-at-timestamp"></p>
+  </div>
 </div>
 </body>
 <script>
@@ -248,16 +251,18 @@ $(document).ready(function() {
     var sys = $.cookies.get("sys") || "false";
     var url = "/api/v1/topology/"+topologyId+"?sys="+sys;
     if(window) url += "&window="+window;
-    $.extend( $.fn.dataTable.defaults, {
-      stateSave: true,
-      stateSaveCallback: function (oSettings, oData) {
-        sessionStorage.setItem( oSettings.sTableId.concat(tableStateKey), JSON.stringify(oData) );
-      },
-      stateLoadCallback: function (oSettings) {
-        return JSON.parse( sessionStorage.getItem(oSettings.sTableId.concat(tableStateKey)) );
-      },
-      lengthMenu: [[20,40,60,100,-1], [20, 40, 60, 100, "All"]],
-      pageLength: 20
+    $.getJSON("/api/v1/cluster/configuration",function(response,status,jqXHR) {
+        $.extend( $.fn.dataTable.defaults, {
+          stateSave: true,
+          stateSaveCallback: function (oSettings, oData) {
+            sessionStorage.setItem( oSettings.sTableId.concat(tableStateKey), JSON.stringify(oData) );
+          },
+          stateLoadCallback: function (oSettings) {
+            return JSON.parse( sessionStorage.getItem(oSettings.sTableId.concat(tableStateKey)) );
+          },
+          lengthMenu: [[20,40,60,100,-1], [20, 40, 60, 100, "All"]],
+          pageLength: response["ui.pagination"]
+        });
     });
 
     renderToggleSys($("#toggle-switch"));
@@ -337,8 +342,9 @@ $(document).ready(function() {
 
           jsError(function() {
             topologyVisualization.append(Mustache.render($(template).filter("#topology-visualization-template").html(), response));
-            $("#show-hide-visualization").click(function () { show_visualization(null) });
-            $("#open-visualization").click(function() { open_visualization(); });
+            var sys = $.cookies.get("sys") || "false";
+            $("#show-hide-visualization").click(function () { show_visualization(sys) });
+            $("#open-visualization").click(function() { open_visualization(sys); });
 
             config.append(Mustache.render($(template).filter("#topology-configuration-template").html(),formattedConfig));
             $('#topology-configuration td').jsonFormatter()
@@ -353,6 +359,7 @@ $(document).ready(function() {
                 errorCells[i].style.color = "#9d261d";
                 errorCells[i].style.borderBottomColor = "#9d261d";
               }
+              errorCells[i].style.whiteSpace = "pre";
             }
             
             var errorTime = document.getElementsByClassName("errorTime");
@@ -448,6 +455,9 @@ $(document).ready(function() {
       }});
     });
  });
+
+getPageRenderedTimestamp("page-rendered-at-timestamp");
+
 </script>
 </html>
 

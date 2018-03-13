@@ -291,6 +291,7 @@ def exec_storm_class(klass, jvmtype="-server", jvmopts=[], extrajars=[], args=[]
             ret = sub.check_output(all_args, stderr=sub.STDOUT)
             print(ret)
         except sub.CalledProcessError as e:
+            print(e.output)
             sys.exit(e.returncode)
     else:
         os.execvp(JAVA_CMD, all_args)
@@ -302,39 +303,18 @@ def run_client_jar(jarfile, klass, args, daemon=False, client=True, extrajvmopts
     local_jars = DEP_JARS_OPTS
     artifact_to_file_jars = resolve_dependencies(DEP_ARTIFACTS_OPTS, DEP_ARTIFACTS_REPOSITORIES_OPTS, DEP_PROXY_URL, DEP_PROXY_USERNAME, DEP_PROXY_PASSWORD)
 
-    transform_class = confvalue("client.jartransformer.class", [CLUSTER_CONF_DIR])
-    if (transform_class != None and transform_class != "null"):
-        tmpjar = os.path.join(tempfile.gettempdir(), uuid.uuid1().hex+".jar")
-        exec_storm_class("org.apache.storm.daemon.ClientJarTransformerRunner", args=[transform_class, jarfile, tmpjar], fork=True, daemon=False)
-        extra_jars = [tmpjar, USER_CONF_DIR, STORM_BIN_DIR]
-        extra_jars.extend(local_jars)
-        extra_jars.extend(artifact_to_file_jars.values())
-        topology_runner_exit_code = exec_storm_class(
-                klass,
-                jvmtype="-client",
-                extrajars=extra_jars,
-                args=args,
-                daemon=daemon,
-                client=client,
-                fork=True,
-                jvmopts=JAR_JVM_OPTS + extrajvmopts + ["-Dstorm.jar=" + tmpjar] +
-                        ["-Dstorm.dependency.jars=" + ",".join(local_jars)] +
-                        ["-Dstorm.dependency.artifacts=" + json.dumps(artifact_to_file_jars)])
-        os.remove(tmpjar)
-        sys.exit(topology_runner_exit_code)
-    else:
-        extra_jars=[jarfile, USER_CONF_DIR, STORM_BIN_DIR]
-        extra_jars.extend(local_jars)
-        extra_jars.extend(artifact_to_file_jars.values())
-        exec_storm_class(
-            klass,
-            jvmtype="-client",
-            extrajars=extra_jars,
-            args=args,
-            daemon=False,
-            jvmopts=JAR_JVM_OPTS + extrajvmopts + ["-Dstorm.jar=" + jarfile] +
-                    ["-Dstorm.dependency.jars=" + ",".join(local_jars)] +
-                    ["-Dstorm.dependency.artifacts=" + json.dumps(artifact_to_file_jars)])
+    extra_jars=[jarfile, USER_CONF_DIR, STORM_BIN_DIR]
+    extra_jars.extend(local_jars)
+    extra_jars.extend(artifact_to_file_jars.values())
+    exec_storm_class(
+        klass,
+        jvmtype="-client",
+        extrajars=extra_jars,
+        args=args,
+        daemon=False,
+        jvmopts=JAR_JVM_OPTS + extrajvmopts + ["-Dstorm.jar=" + jarfile] +
+                ["-Dstorm.dependency.jars=" + ",".join(local_jars)] +
+                ["-Dstorm.dependency.artifacts=" + json.dumps(artifact_to_file_jars)])
 
 def local(jarfile, klass, *args):
     """Syntax: [storm local topology-jar-path class ...]
@@ -581,10 +561,10 @@ def deactivate(*args):
         extrajars=[USER_CONF_DIR, STORM_BIN_DIR])
 
 def rebalance(*args):
-    """Syntax: [storm rebalance topology-name [-w wait-time-secs] [-n new-num-workers] [-e component=parallelism]*]
+    """Syntax: [storm rebalance topology-name [-w wait-time-secs] [-n new-num-workers] [-e component=parallelism]*  [-r '{"component1": {"resource1": new_amount, "resource2": new_amount, ... }*}'] [-t '{"conf1": newValue, *}']]
 
-    Sometimes you may wish to spread out where the workers for a topology
-    are running. For example, let's say you have a 10 node cluster running
+    Sometimes you may wish to spread out the workers for a running topology.
+    For example, let's say you have a 10 node cluster running
     4 workers per node, and then let's say you add another 10 nodes to
     the cluster. You may wish to have Storm spread out the workers for the
     running topology so that each node runs 2 workers. One way to do this
@@ -592,14 +572,15 @@ def rebalance(*args):
     command that provides an easier way to do this.
 
     Rebalance will first deactivate the topology for the duration of the
-    message timeout (overridable with the -w flag) and then redistribute
-    the workers evenly around the cluster. The topology will then return to
-    its previous state of activation (so a deactivated topology will still
-    be deactivated and an activated topology will go back to being activated).
+    message timeout (overridable with the -w flag) make requested adjustments to the topology
+    and let the scheduler try to find a better scheduling based off of the
+    new situation. The topology will then return to its previous state of activation
+    (so a deactivated topology will still be deactivated and an activated
+    topology will go back to being activated).
 
-    The rebalance command can also be used to change the parallelism of a running topology.
-    Use the -n and -e switches to change the number of workers or number of executors of a component
-    respectively.
+    Some of what you can change about a topology includes the number of requested workers (-n flag)
+    The number of executors for a given component (-e flag) the resources each component is
+    requesting as used by the resource aware scheduler (-r flag) and configs (-t flag).
     """
     if not args:
         print_usage(command="rebalance")
@@ -759,7 +740,6 @@ def supervisor(klass="org.apache.storm.daemon.supervisor.Supervisor"):
     cppaths = [CLUSTER_CONF_DIR]
     jvmopts = parse_args(confvalue("supervisor.childopts", cppaths)) + [
         "-Dlogfile.name=" + STORM_SUPERVISOR_LOG_FILE,
-        "-DLog4jContextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector",
         "-Dlog4j.configurationFile=" + os.path.join(get_log4j2_conf_dir(), "cluster.xml"),
     ]
     exec_storm_class(
@@ -808,12 +788,16 @@ def logviewer():
         "-DLog4jContextSelector=org.apache.logging.log4j.core.async.AsyncLoggerContextSelector",
         "-Dlog4j.configurationFile=" + os.path.join(get_log4j2_conf_dir(), "cluster.xml")
     ]
+
+    allextrajars = get_wildcard_dir(STORM_WEBAPP_LIB_DIR)
+    allextrajars.append(CLUSTER_CONF_DIR)
     exec_storm_class(
-        "org.apache.storm.daemon.logviewer",
+        "org.apache.storm.daemon.logviewer.LogviewerServer",
         jvmtype="-server",
         daemonName="logviewer",
         jvmopts=jvmopts,
-        extrajars=[STORM_DIR, CLUSTER_CONF_DIR])
+        extrajars=allextrajars)
+
 
 def drpcclient(*args):
     """Syntax: [storm drpc-client [options] ([function argument]*)|(argument*)]

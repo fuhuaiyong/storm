@@ -23,6 +23,8 @@ import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Writer;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Path;
 import java.util.Map;
 
 public interface IAdvancedFSOps {
@@ -83,19 +85,19 @@ public interface IAdvancedFSOps {
 
     /**
      * Setup the permissions for the storm code dir
-     * @param topologyConf the config of the Topology
+     * @param user the owner of the topology
      * @param path the directory to set the permissions on
      * @throws IOException on any error
      */
-    void setupStormCodeDir(Map<String, Object> topologyConf, File path) throws IOException;
+    void setupStormCodeDir(String user, File path) throws IOException;
 
     /**
      * Setup the permissions for the worker artifacts dirs
-     * @param topologyConf the config of the Topology
+     * @param user the owner of the topology
      * @param path the directory to set the permissions on
      * @throws IOException on any error
      */
-    void setupWorkerArtifactsDir(Map<String, Object> topologyConf, File path) throws IOException;
+    void setupWorkerArtifactsDir(String user, File path) throws IOException;
 
     /**
      * Sanity check if everything the topology needs is there for it to run.
@@ -116,12 +118,46 @@ public interface IAdvancedFSOps {
     void forceMkdir(File path) throws IOException;
 
     /**
+     * Makes a directory, including any necessary but nonexistent parent
+     * directories.
+     *
+     * @param path the directory to create
+     * @throws IOException on any error
+     */
+    void forceMkdir(Path path) throws IOException;
+
+    /**
+     * List the contents of a directory.
+     * @param dir the driectory to list the contents of
+     * @param filter a filter to decide if it should be included or not
+     * @return A stream of directory entries
+     * @throws IOException on any error
+     */
+    DirectoryStream<Path> newDirectoryStream(Path dir, DirectoryStream.Filter<? super Path> filter) throws IOException;
+
+    /**
+     * List the contents of a directory.
+     * @param dir the driectory to list the contents of
+     * @return A stream of directory entries
+     * @throws IOException on any error
+     */
+    DirectoryStream<Path> newDirectoryStream(Path dir) throws IOException;
+
+    /**
      * Check if a file exists or not
      * @param path the path to check
      * @return true if it exists else false
      * @throws IOException on any error.
      */
     boolean fileExists(File path) throws IOException;
+
+    /**
+     * Check if a file exists or not
+     * @param path the path to check
+     * @return true if it exists else false
+     * @throws IOException on any error.
+     */
+    boolean fileExists(Path path) throws IOException;
 
     /**
      * Get a writer for the given location
@@ -157,7 +193,7 @@ public interface IAdvancedFSOps {
 
     /**
      * Read the contents of a file into a byte array.
-     * @param localtion the file to read
+     * @param location the file to read
      * @return the contents of the file
      * @throws IOException on any error
      */

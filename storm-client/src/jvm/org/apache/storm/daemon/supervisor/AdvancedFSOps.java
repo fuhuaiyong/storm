@@ -24,6 +24,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.io.Writer;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -80,34 +81,41 @@ public class AdvancedFSOps implements IAdvancedFSOps {
         @Override
         public void deleteIfExists(File path, String user, String logPrefix) throws IOException {
             String absolutePath = path.getAbsolutePath();
-            LOG.info("Deleting path {}", absolutePath);
-            if (user == null) {
-                user = Files.getOwner(path.toPath()).getName();
-            }
-            List<String> commands = new ArrayList<>();
-            commands.add("rmr");
-            commands.add(absolutePath);
-            ClientSupervisorUtils.processLauncherAndWait(_conf, user, commands, null, logPrefix);
-
             if (Utils.checkFileExists(absolutePath)) {
-                // It's possible that permissions were not set properly on the directory, and
-                // the user who is *supposed* to own the dir does not. In this case, try the
-                // delete as the supervisor user.
-                Utils.forceDelete(absolutePath);
+                LOG.info("Deleting path (runAsUser) {}", absolutePath);
+                if (user == null) {
+                    user = Files.getOwner(path.toPath()).getName();
+                }
+                List<String> commands = new ArrayList<>();
+                commands.add("rmr");
+                commands.add(absolutePath);
+                ClientSupervisorUtils.processLauncherAndWait(_conf, user, commands, null, logPrefix);
+
                 if (Utils.checkFileExists(absolutePath)) {
-                    throw new RuntimeException(path + " was not deleted.");
+                    // It's possible that permissions were not set properly on the directory, and
+                    // the user who is *supposed* to own the dir does not. In this case, try the
+                    // delete as the supervisor user.
+                    Utils.forceDelete(absolutePath);
+                    if (Utils.checkFileExists(absolutePath)) {
+                        throw new RuntimeException(path + " was not deleted.");
+                    }
                 }
             }
         }
+
+        @Override
+        public void deleteIfExists(File path) throws IOException {
+            deleteIfExists(path, null, "UNNAMED");
+        }
         
         @Override
-        public void setupStormCodeDir(Map<String, Object> topologyConf, File path) throws IOException {
-            ClientSupervisorUtils.setupStormCodeDir(_conf, topologyConf, path.getCanonicalPath());
+        public void setupStormCodeDir(String user, File path) throws IOException {
+            ClientSupervisorUtils.setupStormCodeDir(_conf, user, path.getCanonicalPath());
         }
 
         @Override
-        public void setupWorkerArtifactsDir(Map<String, Object> topologyConf, File path) throws IOException {
-            ClientSupervisorUtils.setupWorkerArtifactsDir(_conf, topologyConf, path.getCanonicalPath());
+        public void setupWorkerArtifactsDir(String user, File path) throws IOException {
+            ClientSupervisorUtils.setupWorkerArtifactsDir(_conf, user, path.getCanonicalPath());
         }
     }
     
@@ -232,21 +240,21 @@ public class AdvancedFSOps implements IAdvancedFSOps {
 
     /**
      * Setup the permissions for the storm code dir
-     * @param topologyConf the config of the Topology
+     * @param user the user that owns the topology
      * @param path the directory to set the permissions on
      * @throws IOException on any error
      */
-    public void setupStormCodeDir(Map<String, Object> topologyConf, File path) throws IOException {
+    public void setupStormCodeDir(String user, File path) throws IOException {
         //By default this is a NOOP
     }
 
     /**
      * Setup the permissions for the worker artifacts dirs
-     * @param topologyConf the config of the Topology
+     * @param user the user that owns the topology
      * @param path the directory to set the permissions on
      * @throws IOException on any error
      */
-    public void setupWorkerArtifactsDir(Map<String, Object> topologyConf, File path) throws IOException {
+    public void setupWorkerArtifactsDir(String user, File path) throws IOException {
         //By default this is a NOOP
     }
 
@@ -273,6 +281,25 @@ public class AdvancedFSOps implements IAdvancedFSOps {
     }
 
     /**
+     * Makes a directory, including any necessary but nonexistent parent
+     * directories.
+     *
+     * @param path the directory to create
+     * @throws IOException on any error
+     */
+    public void forceMkdir(Path path) throws IOException {
+        Files.createDirectories(path);
+    }
+
+    public DirectoryStream<Path> newDirectoryStream(Path dir, DirectoryStream.Filter<? super Path> filter) throws IOException {
+        return Files.newDirectoryStream(dir, filter);
+    }
+
+    public DirectoryStream<Path> newDirectoryStream(Path dir) throws IOException {
+        return Files.newDirectoryStream(dir);
+    }
+
+    /**
      * Check if a file exists or not
      * @param path the path to check
      * @return true if it exists else false
@@ -280,6 +307,16 @@ public class AdvancedFSOps implements IAdvancedFSOps {
      */
     public boolean fileExists(File path) throws IOException {
         return path.exists();
+    }
+
+    /**
+     * Check if a file exists or not
+     * @param path the path to check
+     * @return true if it exists else false
+     * @throws IOException on any error.
+     */
+    public boolean fileExists(Path path) throws IOException {
+        return Files.exists(path);
     }
 
     /**

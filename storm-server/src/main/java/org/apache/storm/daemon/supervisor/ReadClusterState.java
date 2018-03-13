@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.storm.daemon.supervisor;
 
 import java.util.ArrayList;
@@ -40,7 +41,9 @@ import org.apache.storm.generated.LocalAssignment;
 import org.apache.storm.generated.NodeInfo;
 import org.apache.storm.generated.ProfileRequest;
 import org.apache.storm.generated.WorkerResources;
-import org.apache.storm.localizer.ILocalizer;
+import org.apache.storm.localizer.AsyncLocalizer;
+import org.apache.storm.metricstore.MetricStoreConfig;
+import org.apache.storm.metricstore.WorkerMetricsProcessor;
 import org.apache.storm.scheduler.ISupervisor;
 import org.apache.storm.utils.LocalState;
 import org.apache.storm.utils.Time;
@@ -59,13 +62,14 @@ public class ReadClusterState implements Runnable, AutoCloseable {
     private final AtomicInteger readRetry = new AtomicInteger(0);
     private final String assignmentId;
     private final ISupervisor iSuper;
-    private final ILocalizer localizer;
+    private final AsyncLocalizer localizer;
     private final ContainerLauncher launcher;
     private final String host;
     private final LocalState localState;
-    private final IStormClusterState clusterState;
     private final AtomicReference<Map<Long, LocalAssignment>> cachedAssignments;
-    
+    private final OnlyLatestExecutor<Integer> metricsExec;
+    private WorkerMetricsProcessor metricsProcessor;
+
     public ReadClusterState(Supervisor supervisor) throws Exception {
         this.superConf = supervisor.getConf();
         this.stormClusterState = supervisor.getStormClusterState();
@@ -76,10 +80,18 @@ public class ReadClusterState implements Runnable, AutoCloseable {
         this.localizer = supervisor.getAsyncLocalizer();
         this.host = supervisor.getHostName();
         this.localState = supervisor.getLocalState();
-        this.clusterState = supervisor.getStormClusterState();
         this.cachedAssignments = supervisor.getCurrAssignment();
+        this.metricsExec = new OnlyLatestExecutor<>(supervisor.getHeartbeatExecutor());
         
         this.launcher = ContainerLauncher.make(superConf, assignmentId, supervisor.getSharedContext());
+
+        this.metricsProcessor = null;
+        try {
+            this.metricsProcessor = MetricStoreConfig.configureMetricProcessor(superConf);
+        } catch (Exception e) {
+            // the metrics processor is not critical to the operation of the cluster, allow Supervisor to come up
+            LOG.error("Failed to initialize metric processor", e);
+        }
         
         @SuppressWarnings("unchecked")
         List<Number> ports = (List<Number>)superConf.get(DaemonConfig.SUPERVISOR_SLOTS_PORTS);
@@ -101,13 +113,6 @@ public class ReadClusterState implements Runnable, AutoCloseable {
         } catch (Exception e) {
             LOG.warn("Error trying to clean up old workers", e);
         }
-
-        //All the slots/assignments should be recovered now, so we can clean up anything that we don't expect to be here
-        try {
-            localizer.cleanupUnusedTopologies();
-        } catch (Exception e) {
-            LOG.warn("Error trying to clean up old topologies", e);
-        }
         
         for (Slot slot: slots.values()) {
             slot.start();
@@ -116,7 +121,7 @@ public class ReadClusterState implements Runnable, AutoCloseable {
 
     private Slot mkSlot(int port) throws Exception {
         return new Slot(localizer, superConf, launcher, host, port,
-                localState, clusterState, iSuper, cachedAssignments);
+                localState, stormClusterState, iSuper, cachedAssignments, metricsExec, metricsProcessor);
     }
     
     @Override
@@ -145,6 +150,7 @@ public class ReadClusterState implements Runnable, AutoCloseable {
                 }
             }
             HashSet<Integer> allPorts = new HashSet<>(assignedPorts);
+            iSuper.assigned(allPorts);
             allPorts.addAll(slots.keySet());
             
             Map<Integer, Set<TopoProfileAction>> filtered = new HashMap<>();
@@ -250,7 +256,7 @@ public class ReadClusterState implements Runnable, AutoCloseable {
         }
     }
     
-    protected Map<Integer, LocalAssignment> readMyExecutors(String stormId, String assignmentId, Assignment assignment) {
+    protected Map<Integer, LocalAssignment> readMyExecutors(String topoId, String assignmentId, Assignment assignment) {
         Map<Integer, LocalAssignment> portTasks = new HashMap<>();
         Map<Long, WorkerResources> slotsResources = new HashMap<>();
         Map<NodeInfo, WorkerResources> nodeInfoWorkerResourcesMap = assignment.get_worker_resources();
@@ -264,6 +270,15 @@ public class ReadClusterState implements Runnable, AutoCloseable {
                 }
             }
         }
+        boolean hasShared = false;
+        double amountShared = 0.0;
+        if (assignment.is_set_total_shared_off_heap()) {
+            Double d = assignment.get_total_shared_off_heap().get(assignmentId);
+            if (d != null) {
+                amountShared = d;
+                hasShared = true;
+            }
+        }
         Map<List<Long>, NodeInfo> executorNodePort = assignment.get_executor_node_port();
         if (executorNodePort != null) {
             for (Map.Entry<List<Long>, NodeInfo> entry : executorNodePort.entrySet()) {
@@ -272,9 +287,15 @@ public class ReadClusterState implements Runnable, AutoCloseable {
                         LocalAssignment localAssignment = portTasks.get(port.intValue());
                         if (localAssignment == null) {
                             List<ExecutorInfo> executors = new ArrayList<>();
-                            localAssignment = new LocalAssignment(stormId, executors);
+                            localAssignment = new LocalAssignment(topoId, executors);
                             if (slotsResources.containsKey(port)) {
                                 localAssignment.set_resources(slotsResources.get(port));
+                            }
+                            if (hasShared) {
+                                localAssignment.set_total_node_shared(amountShared);
+			    }
+                            if (assignment.is_set_owner()) {
+                                localAssignment.set_owner(assignment.get_owner());
                             }
                             portTasks.put(port.intValue(), localAssignment);
                         }

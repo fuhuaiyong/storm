@@ -52,32 +52,64 @@ public abstract class BaseConfigurationDeclarer<T extends ComponentConfiguration
         return addConfiguration(Config.TOPOLOGY_TASKS, val);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public T setMemoryLoad(Number onHeap) {
         if (onHeap != null) {
             onHeap = onHeap.doubleValue();
+            addResource(Config.TOPOLOGY_COMPONENT_RESOURCES_ONHEAP_MEMORY_MB, onHeap);
             return addConfiguration(Config.TOPOLOGY_COMPONENT_RESOURCES_ONHEAP_MEMORY_MB, onHeap);
         }
-        return null;
+        return (T) this;
     }
 
     @Override
     public T setMemoryLoad(Number onHeap, Number offHeap) {
-        T ret = null;
+        @SuppressWarnings("unchecked")
+        T ret = (T) this;
         ret = setMemoryLoad(onHeap);
 
         if (offHeap!=null) {
             offHeap = offHeap.doubleValue();
+            addResource(Config.TOPOLOGY_COMPONENT_RESOURCES_OFFHEAP_MEMORY_MB, offHeap);
             ret = addConfiguration(Config.TOPOLOGY_COMPONENT_RESOURCES_OFFHEAP_MEMORY_MB, offHeap);
         }
         return ret;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public T setCPULoad(Number amount) {
-        if(amount != null) {
+        if (amount != null) {
+            addResource(Config.TOPOLOGY_COMPONENT_CPU_PCORE_PERCENT, amount);
             return addConfiguration(Config.TOPOLOGY_COMPONENT_CPU_PCORE_PERCENT, amount);
         }
-        return null;
+        return (T) this;
     }
+
+    @SuppressWarnings("unchecked")
+    public T addResource(String resourceName, Number resourceValue) {
+        Map<String, Double> resourcesMap = (Map<String, Double>) getComponentConfiguration().computeIfAbsent(Config.TOPOLOGY_COMPONENT_RESOURCES_MAP,
+            (x) -> new HashMap<String, Double>());
+        resourcesMap.put(resourceName, resourceValue.doubleValue());
+
+        return (T) this;
+    }
+
+    /**
+     * Add generic resources for this component.
+     *
+     * @param resources
+     */
+    @Override
+    public T addResources(Map<String, Double> resources) {
+        if (resources != null) {
+            Map<String, Double> currentResources = (Map<String, Double>) getComponentConfiguration().computeIfAbsent(
+                Config.TOPOLOGY_COMPONENT_RESOURCES_MAP, (k) -> new HashMap<>());
+            currentResources.putAll(resources);
+        }
+        return (T) this;
+    }
+
+
 }

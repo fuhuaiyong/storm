@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.storm.daemon.supervisor;
 
 import java.io.File;
@@ -23,12 +24,11 @@ import java.net.UnknownHostException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.apache.commons.io.FileUtils;
 import org.apache.storm.DaemonConfig;
 import org.apache.storm.StormTimer;
@@ -39,25 +39,20 @@ import org.apache.storm.cluster.IStormClusterState;
 import org.apache.storm.daemon.DaemonCommon;
 import org.apache.storm.daemon.supervisor.timer.SupervisorHealthCheck;
 import org.apache.storm.daemon.supervisor.timer.SupervisorHeartbeat;
-import org.apache.storm.daemon.supervisor.timer.UpdateBlobs;
 import org.apache.storm.event.EventManager;
 import org.apache.storm.event.EventManagerImp;
 import org.apache.storm.generated.LocalAssignment;
 import org.apache.storm.localizer.AsyncLocalizer;
-import org.apache.storm.localizer.ILocalizer;
-import org.apache.storm.localizer.Localizer;
 import org.apache.storm.messaging.IContext;
 import org.apache.storm.metric.StormMetricsRegistry;
 import org.apache.storm.scheduler.ISupervisor;
 import org.apache.storm.utils.ConfigUtils;
-import org.apache.storm.utils.ServerConfigUtils;
-import org.apache.storm.utils.ServerUtils;
-import org.apache.storm.utils.Utils;
-import org.apache.storm.utils.ObjectReader;
 import org.apache.storm.utils.LocalState;
+import org.apache.storm.utils.ObjectReader;
+import org.apache.storm.utils.ServerConfigUtils;
 import org.apache.storm.utils.Time;
+import org.apache.storm.utils.Utils;
 import org.apache.storm.utils.VersionInfo;
-import org.apache.zookeeper.data.ACL;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -78,8 +73,10 @@ public class Supervisor implements DaemonCommon, AutoCloseable {
     private final AtomicReference<Map<Long, LocalAssignment>> currAssignment;
     private final StormTimer heartbeatTimer;
     private final StormTimer eventTimer;
-    private final StormTimer blobUpdateTimer;
-    private final Localizer localizer;
+    //Right now this is only used for sending metrics to nimbus,
+    // but we may want to combine it with the heartbeatTimer at some point
+    // to really make this work well.
+    private final ExecutorService heartbeatExecutor;
     private final AsyncLocalizer asyncLocalizer;
     private EventManager eventManager;
     private ReadClusterState readState;
@@ -95,25 +92,22 @@ public class Supervisor implements DaemonCommon, AutoCloseable {
         this.upTime = Utils.makeUptimeComputer();
         this.stormVersion = VersionInfo.getVersion();
         this.sharedContext = sharedContext;
+        this.heartbeatExecutor = Executors.newFixedThreadPool(1);
         
         iSupervisor.prepare(conf, ServerConfigUtils.supervisorIsupervisorDir(conf));
-        
-        List<ACL> acls = null;
-        if (Utils.isZkAuthenticationConfiguredStormServer(conf)) {
-            acls = SupervisorUtils.supervisorZkAcls();
-        }
 
         try {
-            this.stormClusterState = ClusterUtils.mkStormClusterState(conf, acls, new ClusterStateContext(DaemonType.SUPERVISOR));
+            this.stormClusterState = ClusterUtils.mkStormClusterState(conf, new ClusterStateContext(DaemonType.SUPERVISOR, conf));
         } catch (Exception e) {
             LOG.error("supervisor can't create stormClusterState");
             throw Utils.wrapInRuntime(e);
         }
 
+        this.currAssignment = new AtomicReference<>(new HashMap<>());
+
         try {
             this.localState = ServerConfigUtils.supervisorState(conf);
-            this.localizer = ServerUtils.createLocalizer(conf, ConfigUtils.supervisorLocalDir(conf));
-            this.asyncLocalizer = new AsyncLocalizer(conf, this.localizer);
+            this.asyncLocalizer = new AsyncLocalizer(conf);
         } catch (IOException e) {
             throw Utils.wrapInRuntime(e);
         }
@@ -126,15 +120,18 @@ public class Supervisor implements DaemonCommon, AutoCloseable {
             throw Utils.wrapInRuntime(e);
         }
 
-        this.currAssignment = new AtomicReference<Map<Long, LocalAssignment>>(new HashMap<Long,LocalAssignment>());
-
         this.heartbeatTimer = new StormTimer(null, new DefaultUncaughtExceptionHandler());
 
         this.eventTimer = new StormTimer(null, new DefaultUncaughtExceptionHandler());
-
-        this.blobUpdateTimer = new StormTimer("blob-update-timer", new DefaultUncaughtExceptionHandler());
     }
-    
+
+    /**
+     * Get the executor service that is supposed to be used for heart-beats.
+     */
+    public ExecutorService getHeartbeatExecutor() {
+        return heartbeatExecutor;
+    }
+
     public String getId() {
         return supervisorId;
     }
@@ -178,12 +175,8 @@ public class Supervisor implements DaemonCommon, AutoCloseable {
     public AtomicReference<Map<Long, LocalAssignment>> getCurrAssignment() {
         return currAssignment;
     }
-
-    public Localizer getLocalizer() {
-        return localizer;
-    }
     
-    ILocalizer getAsyncLocalizer() {
+    AsyncLocalizer getAsyncLocalizer() {
         return asyncLocalizer;
     }
     
@@ -192,14 +185,12 @@ public class Supervisor implements DaemonCommon, AutoCloseable {
     }
     
     /**
-     * Launch the supervisor
+     * Launch the supervisor.
      */
     public void launch() throws Exception {
         LOG.info("Starting Supervisor with conf {}", conf);
         String path = ServerConfigUtils.supervisorTmpDir(conf);
         FileUtils.cleanDirectory(new File(path));
-
-        Localizer localizer = getLocalizer();
 
         SupervisorHeartbeat hb = new SupervisorHeartbeat(conf, this);
         hb.run();
@@ -209,34 +200,24 @@ public class Supervisor implements DaemonCommon, AutoCloseable {
 
         this.eventManager = new EventManagerImp(false);
         this.readState = new ReadClusterState(this);
-        
-        Set<String> downloadedTopoIds = SupervisorUtils.readDownloadedTopologyIds(conf);
-        for (String topoId : downloadedTopoIds) {
-            SupervisorUtils.addBlobReferences(localizer, topoId, conf);
-        }
-        // do this after adding the references so we don't try to clean things being used
-        localizer.startCleaner();
 
-        UpdateBlobs updateBlobsThread = new UpdateBlobs(this);
+        asyncLocalizer.start();
 
         if ((Boolean) conf.get(DaemonConfig.SUPERVISOR_ENABLE)) {
             // This isn't strictly necessary, but it doesn't hurt and ensures that the machine stays up
             // to date even if callbacks don't all work exactly right
             eventTimer.scheduleRecurring(0, 10, new EventManagerPushCallback(readState, eventManager));
 
-            // Blob update thread. Starts with 30 seconds delay, every 30 seconds
-            blobUpdateTimer.scheduleRecurring(30, 30, new EventManagerPushCallback(updateBlobsThread, eventManager));
-
             // supervisor health check
-            eventTimer.scheduleRecurring(300, 300, new SupervisorHealthCheck(this));
+            eventTimer.scheduleRecurring(30, 30, new SupervisorHealthCheck(this));
         }
         LOG.info("Starting supervisor with id {} at host {}.", getId(), getHostName());
     }
 
     /**
-     * start distribute supervisor
+     * start distribute supervisor.
      */
-    private void launchDaemon() {
+    public void launchDaemon() {
         LOG.info("Starting supervisor for storm version '{}'.", VersionInfo.getVersion());
         try {
             Map<String, Object> conf = getConf();
@@ -244,7 +225,7 @@ public class Supervisor implements DaemonCommon, AutoCloseable {
                 throw new IllegalArgumentException("Cannot start server in local mode!");
             }
             launch();
-            Utils.addShutdownHookWithForceKillIn1Sec(() -> {this.close();});
+            Utils.addShutdownHookWithForceKillIn1Sec(this::close);
             registerWorkerNumGauge("supervisor:num-slots-used-gauge", conf);
             StormMetricsRegistry.startMetricsReporters(conf);
         } catch (Exception e) {
@@ -270,15 +251,13 @@ public class Supervisor implements DaemonCommon, AutoCloseable {
             this.active = false;
             heartbeatTimer.close();
             eventTimer.close();
-            blobUpdateTimer.close();
             if (eventManager != null) {
                 eventManager.close();
             }
             if (readState != null) {
                 readState.close();
             }
-            asyncLocalizer.shutdown();
-            localizer.shutdown();
+            asyncLocalizer.close();
             getStormClusterState().disconnect();
         } catch (Exception e) {
             LOG.error("Error Shutting down", e);
@@ -308,7 +287,7 @@ public class Supervisor implements DaemonCommon, AutoCloseable {
             try {
                 k.forceKill();
                 long start = Time.currentTimeMillis();
-                while(!k.areAllProcessesDead()) {
+                while (!k.areAllProcessesDead()) {
                     if ((Time.currentTimeMillis() - start) > 10_000) {
                         throw new RuntimeException("Giving up on killing " + k 
                                 + " after " + (Time.currentTimeMillis() - start) + " ms");

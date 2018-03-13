@@ -18,10 +18,6 @@
 
 package org.apache.storm.utils;
 
-import org.apache.commons.io.FileUtils;
-import org.apache.storm.Config;
-import org.apache.storm.DaemonConfig;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -30,11 +26,18 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.storm.Config;
+import org.apache.storm.DaemonConfig;
+
+
 
 public class ServerConfigUtils {
     public static final String FILE_SEPARATOR = File.separator;
-    public final static String NIMBUS_DO_NOT_REASSIGN = "NIMBUS-DO-NOT-REASSIGN";
-    public final static String RESOURCES_SUBDIR = "resources";
+    public static final String NIMBUS_DO_NOT_REASSIGN = "NIMBUS-DO-NOT-REASSIGN";
+    public static final String RESOURCES_SUBDIR = "resources";
 
     // A singleton instance allows us to mock delegated static methods in our
     // tests by subclassing.
@@ -54,7 +57,7 @@ public class ServerConfigUtils {
     }
 
     public static String masterLocalDir(Map<String, Object> conf) throws IOException {
-        String ret = String.valueOf(conf.get(Config.STORM_LOCAL_DIR)) + FILE_SEPARATOR + "nimbus";
+        String ret = ConfigUtils.absoluteStormLocalDir(conf) + FILE_SEPARATOR + "nimbus";
         FileUtils.forceMkdir(new File(ret));
         return ret;
     }
@@ -161,7 +164,7 @@ public class ServerConfigUtils {
     }
 
     public static File getLogMetaDataFile(String fname) {
-        String[] subStrings = fname.split(FILE_SEPARATOR); // TODO: does this work well on windows?
+        String[] subStrings = fname.split(Pattern.quote(FILE_SEPARATOR)); // TODO: does this work well on windows?
         String id = subStrings[0];
         Integer port = Integer.parseInt(subStrings[1]);
         return getLogMetaDataFile(Utils.readStormConfig(), id, port);

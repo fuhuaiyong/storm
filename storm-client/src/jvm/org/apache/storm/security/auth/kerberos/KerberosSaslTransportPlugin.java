@@ -35,8 +35,12 @@ import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginException;
 import javax.security.sasl.Sasl;
 
+import org.apache.storm.generated.WorkerToken;
 import org.apache.storm.messaging.netty.Login;
 import org.apache.commons.lang.StringUtils;
+import org.apache.storm.security.auth.sasl.SimpleSaslServerCallbackHandler;
+import org.apache.storm.security.auth.workertoken.WorkerTokenAuthorizer;
+import org.apache.storm.security.auth.workertoken.WorkerTokenClientCallbackHandler;
 import org.apache.thrift.transport.TSaslClientTransport;
 import org.apache.thrift.transport.TSaslServerTransport;
 import org.apache.thrift.transport.TTransport;
@@ -47,59 +51,63 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.storm.security.auth.AuthUtils;
-import org.apache.storm.security.auth.SaslTransportPlugin;
+import org.apache.storm.security.auth.sasl.SaslTransportPlugin;
 
 public class KerberosSaslTransportPlugin extends SaslTransportPlugin {
-    public static final String KERBEROS = "GSSAPI"; 
+    public static final String KERBEROS = "GSSAPI";
+    private static final String DIGEST = "DIGEST-MD5";
     private static final Logger LOG = LoggerFactory.getLogger(KerberosSaslTransportPlugin.class);
     private static Map <LoginCacheKey, Login> loginCache = new ConcurrentHashMap<>();
+    private static final String DISABLE_LOGIN_CACHE = "disableLoginCache";
 
     private class LoginCacheKey {
-        private String _keyString = null;
+        private String keyString = null;
 
-        public LoginCacheKey(Configuration conf, String login_context) throws IOException {
-            if (conf == null) {
-                throw new IllegalArgumentException("Configuration should not be null");
-            }
-            SortedMap<String, ?> authConf = AuthUtils.pullConfig(conf, login_context);
-            if (authConf!=null) {
+        public LoginCacheKey(SortedMap<String, ?> authConf) throws IOException {
+            if (authConf != null) {
                 StringBuilder stringBuilder = new StringBuilder();
                 for (String configKey: authConf.keySet()) {
+                    //DISABLE_LOGIN_CACHE indicates whether or not to use the LoginCache.
+                    //So we exclude it from the keyString
+                    if (configKey.equals(DISABLE_LOGIN_CACHE)) {
+                        continue;
+                    }
                     String configValue = (String) authConf.get(configKey);
                     stringBuilder.append(configKey);
                     stringBuilder.append(configValue);
                 }
-                _keyString = stringBuilder.toString();
+                keyString = stringBuilder.toString();
             } else {
-                throw new RuntimeException("Error in parsing the kerberos login Configuration, returned null");
+                throw new IllegalArgumentException("Configuration should not be null");
             }
         }
 
         @Override
         public int hashCode() {
-            return _keyString.hashCode();
+            return keyString.hashCode();
         }
 
         @Override
         public boolean equals(Object obj) {
-            return (obj instanceof LoginCacheKey) && _keyString.equals(((LoginCacheKey)obj)._keyString);
+            return (obj instanceof LoginCacheKey) && keyString.equals(((LoginCacheKey)obj).keyString);
         }
 
         @Override
         public String toString() {
-            return (_keyString);
+            return (keyString);
         }
     }
 
+    @Override
     public TTransportFactory getServerTransportFactory() throws IOException {
         //create an authentication callback handler
-        CallbackHandler server_callback_handler = new ServerCallbackHandler(login_conf, topoConf);
+        CallbackHandler server_callback_handler = new ServerCallbackHandler(loginConf);
         
         //login our principal
         Subject subject = null;
         try {
             //specify a configuration object to be used
-            Configuration.setConfiguration(login_conf);
+            Configuration.setConfiguration(loginConf);
             //now login
             Login login = new Login(AuthUtils.LOGIN_CONTEXT_SERVER, server_callback_handler);
             subject = login.getSubject();
@@ -112,21 +120,25 @@ public class KerberosSaslTransportPlugin extends SaslTransportPlugin {
         //check the credential of our principal
         if (subject.getPrivateCredentials(KerberosTicket.class).isEmpty()) { 
             throw new RuntimeException("Fail to verify user principal with section \""
-                    +AuthUtils.LOGIN_CONTEXT_SERVER+"\" in login configuration file "+ login_conf);
+                    + AuthUtils.LOGIN_CONTEXT_SERVER + "\" in login configuration file " + loginConf);
         }
 
-        String principal = AuthUtils.get(login_conf, AuthUtils.LOGIN_CONTEXT_SERVER, "principal"); 
+        String principal = AuthUtils.get(loginConf, AuthUtils.LOGIN_CONTEXT_SERVER, "principal");
         LOG.debug("principal:"+principal);  
         KerberosName serviceKerberosName = new KerberosName(principal);
         String serviceName = serviceKerberosName.getServiceName();
         String hostName = serviceKerberosName.getHostName();
-        Map<String, String> props = new TreeMap<String,String>();
+        Map<String, String> props = new TreeMap<>();
         props.put(Sasl.QOP, "auth");
         props.put(Sasl.SERVER_AUTH, "false");
 
         //create a transport factory that will invoke our auth callback for digest
         TSaslServerTransport.Factory factory = new TSaslServerTransport.Factory();
         factory.addServerDefinition(KERBEROS, serviceName, hostName, props, server_callback_handler);
+
+        //Also add in support for worker tokens
+        factory.addServerDefinition(DIGEST, AuthUtils.SERVICE, "localhost", null,
+            new SimpleSaslServerCallbackHandler(new WorkerTokenAuthorizer(conf, type)));
 
         //create a wrap transport factory so that we could apply user credential during connections
         TUGIAssumingTransportFactory wrapFactory = new TUGIAssumingTransportFactory(factory, subject); 
@@ -135,29 +147,74 @@ public class KerberosSaslTransportPlugin extends SaslTransportPlugin {
         return wrapFactory;
     }
 
+    private Login mkLogin() throws IOException {
+        try {
+            //create an authentication callback handler
+            ClientCallbackHandler client_callback_handler = new ClientCallbackHandler(loginConf);
+            //specify a configuration object to be used
+            Configuration.setConfiguration(loginConf);
+            //now login
+            Login login = new Login(AuthUtils.LOGIN_CONTEXT_CLIENT, client_callback_handler);
+            login.startThreadIfNeeded();
+            return login;
+        } catch (LoginException ex) {
+            LOG.error("Server failed to login in principal:" + ex, ex);
+            throw new RuntimeException(ex);
+        }
+    }
+
     @Override
-    public TTransport connect(TTransport transport, String serverHost, String asUser) throws TTransportException, IOException {
-        //create an authentication callback handler
-        ClientCallbackHandler client_callback_handler = new ClientCallbackHandler(login_conf);
-        
+    public TTransport connect(TTransport transport, String serverHost, String asUser) throws IOException, TTransportException {
+        WorkerToken token = WorkerTokenClientCallbackHandler.findWorkerTokenInSubject(type);
+        if (token != null && asUser != null) {
+            CallbackHandler clientCallbackHandler = new WorkerTokenClientCallbackHandler(token);
+            TSaslClientTransport wrapperTransport = new TSaslClientTransport(DIGEST,
+                null,
+                AuthUtils.SERVICE,
+                serverHost,
+                null,
+                clientCallbackHandler,
+                transport);
+            wrapperTransport.open();
+            LOG.debug("SASL DIGEST-MD5 WorkerToken client transport has been established");
+
+            return wrapperTransport;
+        }
+        return kerberosConnect(transport, serverHost, asUser);
+    }
+
+    private TTransport kerberosConnect(TTransport transport, String serverHost, String asUser) throws IOException {
         //login our user
-        LoginCacheKey key = new LoginCacheKey(login_conf, AuthUtils.LOGIN_CONTEXT_CLIENT);
-        Login login = loginCache.get(key);
-        if (login == null) {
-            LOG.debug("Kerberos Login was not found in the Login Cache, attempting to contact the Kerberos Server");
-            synchronized (loginCache) {
-                login = loginCache.get(key);
-                if (login == null) {
-                    try {
-                        //specify a configuration object to be used
-                        Configuration.setConfiguration(login_conf);
-                        //now login
-                        login = new Login(AuthUtils.LOGIN_CONTEXT_CLIENT, client_callback_handler);
-                        login.startThreadIfNeeded();
+        SortedMap<String, ?> authConf = AuthUtils.pullConfig(loginConf, AuthUtils.LOGIN_CONTEXT_CLIENT);
+        if (authConf == null) {
+            throw new RuntimeException("Error in parsing the kerberos login Configuration, returned null");
+        }
+
+        boolean disableLoginCache = false;
+        if (authConf.containsKey(DISABLE_LOGIN_CACHE)) {
+            disableLoginCache = Boolean.valueOf((String) authConf.get(DISABLE_LOGIN_CACHE));
+        }
+
+        Login login;
+        LoginCacheKey key = new LoginCacheKey(authConf);
+        if (disableLoginCache) {
+            LOG.debug("Kerberos Login Cache is disabled, attempting to contact the Kerberos Server");
+            login = mkLogin();
+            //this is to prevent the potential bug that
+            //if the Login Cache is (1) enabled, and then (2) disabled and then (3) enabled again,
+            //and if the LoginCacheKey remains unchanged, (3) will use the Login cache from (1), which could be wrong,
+            //because the TGT cache (as well as the principle) could have been changed during (2)
+            loginCache.remove(key);
+        } else {
+            LOG.debug("Trying to get the Kerberos Login from the Login Cache");
+            login = loginCache.get(key);
+            if (login == null) {
+                synchronized (loginCache) {
+                    login = loginCache.get(key);
+                    if (login == null) {
+                        LOG.debug("Kerberos Login was not found in the Login Cache, attempting to contact the Kerberos Server");
+                        login = mkLogin();
                         loginCache.put(key, login);
-                    } catch (LoginException ex) {
-                        LOG.error("Server failed to login in principal:" + ex, ex);
-                        throw new RuntimeException(ex);
                     }
                 }
             }
@@ -166,15 +223,15 @@ public class KerberosSaslTransportPlugin extends SaslTransportPlugin {
         final Subject subject = login.getSubject();
         if (subject.getPrivateCredentials(KerberosTicket.class).isEmpty()) { //error
             throw new RuntimeException("Fail to verify user principal with section \""
-                        +AuthUtils.LOGIN_CONTEXT_CLIENT+"\" in login configuration file "+ login_conf);
+                        +AuthUtils.LOGIN_CONTEXT_CLIENT+"\" in login configuration file "+ loginConf);
         }
 
         final String principal = StringUtils.isBlank(asUser) ? getPrincipal(subject) : asUser;
-        String serviceName = AuthUtils.get(login_conf, AuthUtils.LOGIN_CONTEXT_CLIENT, "serviceName");
+        String serviceName = AuthUtils.get(loginConf, AuthUtils.LOGIN_CONTEXT_CLIENT, "serviceName");
         if (serviceName == null) {
             serviceName = AuthUtils.SERVICE; 
         }
-        Map<String, String> props = new TreeMap<String,String>();
+        Map<String, String> props = new TreeMap<>();
         props.put(Sasl.QOP, "auth");
         props.put(Sasl.SERVER_AUTH, "false");
 
@@ -218,7 +275,8 @@ public class KerberosSaslTransportPlugin extends SaslTransportPlugin {
         return ((Principal)(principals.toArray()[0])).getName();
     }
 
-    /** A TransportFactory that wraps another one, but assumes a specified UGI
+    /**
+     * A TransportFactory that wraps another one, but assumes a specified UGI
      * before calling through.                                                                                                                                                      
      *                                                                                                                                                                              
      * This is used on the server side to assume the server's Principal when accepting                                                                                              
@@ -241,22 +299,25 @@ public class KerberosSaslTransportPlugin extends SaslTransportPlugin {
         public TTransport getTransport(final TTransport trans) {
             try {
                 return Subject.doAs(subject,
-                        new PrivilegedExceptionAction<TTransport>() {
-                    public TTransport run() {
+                    (PrivilegedExceptionAction<TTransport>) () -> {
                         try {
                             return wrapped.getTransport(trans);
                         }
                         catch (Exception e) {
                             LOG.debug("Storm server failed to open transport " +
-                                    "to interact with a client during session initiation: " + e, e);
+                                "to interact with a client during session initiation: " + e, e);
                             return new NoOpTTrasport(null);
                         }
-                    }
-                });
+                    });
             } catch (PrivilegedActionException e) {
                 LOG.error("Storm server experienced a PrivilegedActionException exception while creating a transport using a JAAS principal context:" + e, e);
                 return null;
             }
         }
+    }
+
+    @Override
+    public boolean areWorkerTokensSupported() {
+        return true;
     }
 }

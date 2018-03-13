@@ -17,12 +17,12 @@
  */
 package org.apache.storm.executor;
 
-import com.google.common.collect.Lists;
 import org.apache.storm.Constants;
 import org.apache.storm.daemon.Shutdownable;
 import org.apache.storm.daemon.Task;
 import org.apache.storm.generated.Credentials;
 import org.apache.storm.generated.ExecutorStats;
+import org.apache.storm.grouping.LoadMapping;
 import org.apache.storm.hooks.ITaskHook;
 import org.apache.storm.spout.ISpout;
 import org.apache.storm.task.IBolt;
@@ -30,24 +30,28 @@ import org.apache.storm.task.TopologyContext;
 import org.apache.storm.tuple.AddressedTuple;
 import org.apache.storm.tuple.TupleImpl;
 import org.apache.storm.tuple.Values;
+import org.apache.storm.utils.JCQueue;
 import org.apache.storm.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 public class ExecutorShutdown implements Shutdownable, IRunningExecutor {
 
     private static final Logger LOG = LoggerFactory.getLogger(ExecutorShutdown.class);
+
     private final Executor executor;
     private final List<Utils.SmartThread> threads;
-    private final Map<Integer, Task> taskDatas;
+    private final ArrayList<Task> taskDatas;
+    private final JCQueue receiveQueue;
 
-    public ExecutorShutdown(Executor executor, List<Utils.SmartThread> threads, Map<Integer, Task> taskDatas) {
+    public ExecutorShutdown(Executor executor, List<Utils.SmartThread> threads, ArrayList<Task> taskDatas, JCQueue recvQueue) {
         this.executor = executor;
         this.threads = threads;
         this.taskDatas = taskDatas;
+        this.receiveQueue = recvQueue;
     }
 
     @Override
@@ -62,15 +66,29 @@ public class ExecutorShutdown implements Shutdownable, IRunningExecutor {
 
     @Override
     public void credentialsChanged(Credentials credentials) {
-        TupleImpl tuple = new TupleImpl(executor.getWorkerTopologyContext(), new Values(credentials), (int) Constants.SYSTEM_TASK_ID,
-                Constants.CREDENTIALS_CHANGED_STREAM_ID);
-        List<AddressedTuple> addressedTuple = Lists.newArrayList(new AddressedTuple(AddressedTuple.BROADCAST_DEST, tuple));
-        executor.getReceiveQueue().publish(addressedTuple);
+        TupleImpl tuple = new TupleImpl(executor.getWorkerTopologyContext(), new Values(credentials),
+                Constants.SYSTEM_COMPONENT_ID, (int) Constants.SYSTEM_TASK_ID, Constants.CREDENTIALS_CHANGED_STREAM_ID);
+        AddressedTuple addressedTuple = new AddressedTuple(AddressedTuple.BROADCAST_DEST, tuple);
+        try {
+            executor.getReceiveQueue().publish(addressedTuple);
+            executor.getReceiveQueue().flush();
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void loadChanged(LoadMapping loadMapping) {
+        executor.reflectNewLoadMapping(loadMapping);
     }
 
     @Override
-    public boolean getBackPressureFlag() {
-        return executor.getBackpressure();
+    public JCQueue getReceiveQueue() {
+        return receiveQueue;
+    }
+
+    @Override
+    public boolean publishFlushTuple() {
+        return executor.publishFlushTuple();
     }
 
     @Override
@@ -78,7 +96,6 @@ public class ExecutorShutdown implements Shutdownable, IRunningExecutor {
         try {
             LOG.info("Shutting down executor " + executor.getComponentId() + ":" + executor.getExecutorId());
             executor.getReceiveQueue().haltWithInterrupt();
-            executor.getTransferWorkerQueue().haltWithInterrupt();
             for (Utils.SmartThread t : threads) {
                 t.interrupt();
             }
@@ -87,7 +104,9 @@ public class ExecutorShutdown implements Shutdownable, IRunningExecutor {
                 t.join();
             }
             executor.getStats().cleanupStats();
-            for (Task task : taskDatas.values()) {
+            for (Task task : taskDatas) {
+                if (task==null)
+                    continue;
                 TopologyContext userContext = task.getUserContext();
                 for (ITaskHook hook : userContext.getHooks()) {
                     hook.cleanup();
@@ -95,7 +114,9 @@ public class ExecutorShutdown implements Shutdownable, IRunningExecutor {
             }
             executor.getStormClusterState().disconnect();
             if (executor.getOpenOrPrepareWasCalled().get()) {
-                for (Task task : taskDatas.values()) {
+                for (Task task : taskDatas) {
+                    if (task==null)
+                        continue;
                     Object object = task.getTaskObject();
                     if (object instanceof ISpout) {
                         ((ISpout) object).close();

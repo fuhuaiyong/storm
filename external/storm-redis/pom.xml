@@ -40,10 +40,6 @@
         </developer>
     </developers>
 
-    <properties>
-        <jedis.version>2.9.0</jedis.version>
-    </properties>
-
     <dependencies>
         <dependency>
             <groupId>org.apache.storm</groupId>
@@ -68,12 +64,10 @@
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-core</artifactId>
-            <version>${jackson.version}</version>
         </dependency>
         <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
-            <version>${jackson.version}</version>
         </dependency>
         <!--test dependencies -->
         <dependency>
@@ -83,8 +77,11 @@
         </dependency>
         <dependency>
             <groupId>org.mockito</groupId>
-            <artifactId>mockito-all</artifactId>
-            <scope>test</scope>
+            <artifactId>mockito-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.hamcrest</groupId>
+            <artifactId>java-hamcrest</artifactId>
         </dependency>
     </dependencies>
 

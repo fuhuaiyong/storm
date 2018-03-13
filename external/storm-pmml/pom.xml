@@ -41,10 +41,6 @@
         </developer>
     </developers>
 
-    <properties>
-        <jpmml.version>1.0.22</jpmml.version>
-    </properties>
-
     <dependencies>
         <!--parent module dependency-->
         <dependency>
@@ -75,6 +71,11 @@
             <artifactId>pmml-evaluator</artifactId>
             <version>${jpmml.version}</version>
         </dependency>
+        <!-- JAXB api -->
+        <dependency>
+            <groupId>javax.xml.bind</groupId>
+            <artifactId>jaxb-api</artifactId>
+        </dependency>
     </dependencies>
 
     <build>
@@ -85,7 +86,7 @@
                 <!--Note - the version would be inherited-->
                 <configuration>
 
-                    <maxAllowedViolations>65</maxAllowedViolations>
+                    <maxAllowedViolations>67</maxAllowedViolations>
                 </configuration>
             </plugin>
         </plugins>

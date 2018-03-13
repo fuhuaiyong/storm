@@ -168,6 +168,10 @@ public class Nimbus {
 
     public TopologyHistoryInfo getTopologyHistory(String user) throws AuthorizationException, org.apache.thrift.TException;
 
+    public List<OwnerResourceSummary> getOwnerResourceSummaries(String owner) throws AuthorizationException, org.apache.thrift.TException;
+
+    public void processWorkerMetrics(WorkerMetrics metrics) throws org.apache.thrift.TException;
+
   }
 
   public interface AsyncIface {
@@ -261,6 +265,10 @@ public class Nimbus {
     public void getUserTopology(String id, org.apache.thrift.async.AsyncMethodCallback resultHandler) throws org.apache.thrift.TException;
 
     public void getTopologyHistory(String user, org.apache.thrift.async.AsyncMethodCallback resultHandler) throws org.apache.thrift.TException;
+
+    public void getOwnerResourceSummaries(String owner, org.apache.thrift.async.AsyncMethodCallback resultHandler) throws org.apache.thrift.TException;
+
+    public void processWorkerMetrics(WorkerMetrics metrics, org.apache.thrift.async.AsyncMethodCallback resultHandler) throws org.apache.thrift.TException;
 
   }
 
@@ -1490,6 +1498,52 @@ public class Nimbus {
         throw result.aze;
       }
       throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "getTopologyHistory failed: unknown result");
+    }
+
+    public List<OwnerResourceSummary> getOwnerResourceSummaries(String owner) throws AuthorizationException, org.apache.thrift.TException
+    {
+      send_getOwnerResourceSummaries(owner);
+      return recv_getOwnerResourceSummaries();
+    }
+
+    public void send_getOwnerResourceSummaries(String owner) throws org.apache.thrift.TException
+    {
+      getOwnerResourceSummaries_args args = new getOwnerResourceSummaries_args();
+      args.set_owner(owner);
+      sendBase("getOwnerResourceSummaries", args);
+    }
+
+    public List<OwnerResourceSummary> recv_getOwnerResourceSummaries() throws AuthorizationException, org.apache.thrift.TException
+    {
+      getOwnerResourceSummaries_result result = new getOwnerResourceSummaries_result();
+      receiveBase(result, "getOwnerResourceSummaries");
+      if (result.is_set_success()) {
+        return result.success;
+      }
+      if (result.aze != null) {
+        throw result.aze;
+      }
+      throw new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.MISSING_RESULT, "getOwnerResourceSummaries failed: unknown result");
+    }
+
+    public void processWorkerMetrics(WorkerMetrics metrics) throws org.apache.thrift.TException
+    {
+      send_processWorkerMetrics(metrics);
+      recv_processWorkerMetrics();
+    }
+
+    public void send_processWorkerMetrics(WorkerMetrics metrics) throws org.apache.thrift.TException
+    {
+      processWorkerMetrics_args args = new processWorkerMetrics_args();
+      args.set_metrics(metrics);
+      sendBase("processWorkerMetrics", args);
+    }
+
+    public void recv_processWorkerMetrics() throws org.apache.thrift.TException
+    {
+      processWorkerMetrics_result result = new processWorkerMetrics_result();
+      receiveBase(result, "processWorkerMetrics");
+      return;
     }
 
   }
@@ -3028,6 +3082,70 @@ public class Nimbus {
       }
     }
 
+    public void getOwnerResourceSummaries(String owner, org.apache.thrift.async.AsyncMethodCallback resultHandler) throws org.apache.thrift.TException {
+      checkReady();
+      getOwnerResourceSummaries_call method_call = new getOwnerResourceSummaries_call(owner, resultHandler, this, ___protocolFactory, ___transport);
+      this.___currentMethod = method_call;
+      ___manager.call(method_call);
+    }
+
+    public static class getOwnerResourceSummaries_call extends org.apache.thrift.async.TAsyncMethodCall {
+      private String owner;
+      public getOwnerResourceSummaries_call(String owner, org.apache.thrift.async.AsyncMethodCallback resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
+        super(client, protocolFactory, transport, resultHandler, false);
+        this.owner = owner;
+      }
+
+      public void write_args(org.apache.thrift.protocol.TProtocol prot) throws org.apache.thrift.TException {
+        prot.writeMessageBegin(new org.apache.thrift.protocol.TMessage("getOwnerResourceSummaries", org.apache.thrift.protocol.TMessageType.CALL, 0));
+        getOwnerResourceSummaries_args args = new getOwnerResourceSummaries_args();
+        args.set_owner(owner);
+        args.write(prot);
+        prot.writeMessageEnd();
+      }
+
+      public List<OwnerResourceSummary> getResult() throws AuthorizationException, org.apache.thrift.TException {
+        if (getState() != org.apache.thrift.async.TAsyncMethodCall.State.RESPONSE_READ) {
+          throw new IllegalStateException("Method call not finished!");
+        }
+        org.apache.thrift.transport.TMemoryInputTransport memoryTransport = new org.apache.thrift.transport.TMemoryInputTransport(getFrameBuffer().array());
+        org.apache.thrift.protocol.TProtocol prot = client.getProtocolFactory().getProtocol(memoryTransport);
+        return (new Client(prot)).recv_getOwnerResourceSummaries();
+      }
+    }
+
+    public void processWorkerMetrics(WorkerMetrics metrics, org.apache.thrift.async.AsyncMethodCallback resultHandler) throws org.apache.thrift.TException {
+      checkReady();
+      processWorkerMetrics_call method_call = new processWorkerMetrics_call(metrics, resultHandler, this, ___protocolFactory, ___transport);
+      this.___currentMethod = method_call;
+      ___manager.call(method_call);
+    }
+
+    public static class processWorkerMetrics_call extends org.apache.thrift.async.TAsyncMethodCall {
+      private WorkerMetrics metrics;
+      public processWorkerMetrics_call(WorkerMetrics metrics, org.apache.thrift.async.AsyncMethodCallback resultHandler, org.apache.thrift.async.TAsyncClient client, org.apache.thrift.protocol.TProtocolFactory protocolFactory, org.apache.thrift.transport.TNonblockingTransport transport) throws org.apache.thrift.TException {
+        super(client, protocolFactory, transport, resultHandler, false);
+        this.metrics = metrics;
+      }
+
+      public void write_args(org.apache.thrift.protocol.TProtocol prot) throws org.apache.thrift.TException {
+        prot.writeMessageBegin(new org.apache.thrift.protocol.TMessage("processWorkerMetrics", org.apache.thrift.protocol.TMessageType.CALL, 0));
+        processWorkerMetrics_args args = new processWorkerMetrics_args();
+        args.set_metrics(metrics);
+        args.write(prot);
+        prot.writeMessageEnd();
+      }
+
+      public void getResult() throws org.apache.thrift.TException {
+        if (getState() != org.apache.thrift.async.TAsyncMethodCall.State.RESPONSE_READ) {
+          throw new IllegalStateException("Method call not finished!");
+        }
+        org.apache.thrift.transport.TMemoryInputTransport memoryTransport = new org.apache.thrift.transport.TMemoryInputTransport(getFrameBuffer().array());
+        org.apache.thrift.protocol.TProtocol prot = client.getProtocolFactory().getProtocol(memoryTransport);
+        (new Client(prot)).recv_processWorkerMetrics();
+      }
+    }
+
   }
 
   public static class Processor<I extends Iface> extends org.apache.thrift.TBaseProcessor<I> implements org.apache.thrift.TProcessor {
@@ -3086,6 +3204,8 @@ public class Nimbus {
       processMap.put("getTopology", new getTopology());
       processMap.put("getUserTopology", new getUserTopology());
       processMap.put("getTopologyHistory", new getTopologyHistory());
+      processMap.put("getOwnerResourceSummaries", new getOwnerResourceSummaries());
+      processMap.put("processWorkerMetrics", new processWorkerMetrics());
       return processMap;
     }
 
@@ -4206,6 +4326,50 @@ public class Nimbus {
       }
     }
 
+    public static class getOwnerResourceSummaries<I extends Iface> extends org.apache.thrift.ProcessFunction<I, getOwnerResourceSummaries_args> {
+      public getOwnerResourceSummaries() {
+        super("getOwnerResourceSummaries");
+      }
+
+      public getOwnerResourceSummaries_args getEmptyArgsInstance() {
+        return new getOwnerResourceSummaries_args();
+      }
+
+      protected boolean isOneway() {
+        return false;
+      }
+
+      public getOwnerResourceSummaries_result getResult(I iface, getOwnerResourceSummaries_args args) throws org.apache.thrift.TException {
+        getOwnerResourceSummaries_result result = new getOwnerResourceSummaries_result();
+        try {
+          result.success = iface.getOwnerResourceSummaries(args.owner);
+        } catch (AuthorizationException aze) {
+          result.aze = aze;
+        }
+        return result;
+      }
+    }
+
+    public static class processWorkerMetrics<I extends Iface> extends org.apache.thrift.ProcessFunction<I, processWorkerMetrics_args> {
+      public processWorkerMetrics() {
+        super("processWorkerMetrics");
+      }
+
+      public processWorkerMetrics_args getEmptyArgsInstance() {
+        return new processWorkerMetrics_args();
+      }
+
+      protected boolean isOneway() {
+        return false;
+      }
+
+      public processWorkerMetrics_result getResult(I iface, processWorkerMetrics_args args) throws org.apache.thrift.TException {
+        processWorkerMetrics_result result = new processWorkerMetrics_result();
+        iface.processWorkerMetrics(args.metrics);
+        return result;
+      }
+    }
+
   }
 
   public static class AsyncProcessor<I extends AsyncIface> extends org.apache.thrift.TBaseAsyncProcessor<I> {
@@ -4264,6 +4428,8 @@ public class Nimbus {
       processMap.put("getTopology", new getTopology());
       processMap.put("getUserTopology", new getUserTopology());
       processMap.put("getTopologyHistory", new getTopologyHistory());
+      processMap.put("getOwnerResourceSummaries", new getOwnerResourceSummaries());
+      processMap.put("processWorkerMetrics", new processWorkerMetrics());
       return processMap;
     }
 
@@ -6922,6 +7088,113 @@ public class Nimbus {
 
       public void start(I iface, getTopologyHistory_args args, org.apache.thrift.async.AsyncMethodCallback<TopologyHistoryInfo> resultHandler) throws TException {
         iface.getTopologyHistory(args.user,resultHandler);
+      }
+    }
+
+    public static class getOwnerResourceSummaries<I extends AsyncIface> extends org.apache.thrift.AsyncProcessFunction<I, getOwnerResourceSummaries_args, List<OwnerResourceSummary>> {
+      public getOwnerResourceSummaries() {
+        super("getOwnerResourceSummaries");
+      }
+
+      public getOwnerResourceSummaries_args getEmptyArgsInstance() {
+        return new getOwnerResourceSummaries_args();
+      }
+
+      public AsyncMethodCallback<List<OwnerResourceSummary>> getResultHandler(final AsyncFrameBuffer fb, final int seqid) {
+        final org.apache.thrift.AsyncProcessFunction fcall = this;
+        return new AsyncMethodCallback<List<OwnerResourceSummary>>() { 
+          public void onComplete(List<OwnerResourceSummary> o) {
+            getOwnerResourceSummaries_result result = new getOwnerResourceSummaries_result();
+            result.success = o;
+            try {
+              fcall.sendResponse(fb,result, org.apache.thrift.protocol.TMessageType.REPLY,seqid);
+              return;
+            } catch (Exception e) {
+              LOGGER.error("Exception writing to internal frame buffer", e);
+            }
+            fb.close();
+          }
+          public void onError(Exception e) {
+            byte msgType = org.apache.thrift.protocol.TMessageType.REPLY;
+            org.apache.thrift.TBase msg;
+            getOwnerResourceSummaries_result result = new getOwnerResourceSummaries_result();
+            if (e instanceof AuthorizationException) {
+                        result.aze = (AuthorizationException) e;
+                        result.set_aze_isSet(true);
+                        msg = result;
+            }
+             else 
+            {
+              msgType = org.apache.thrift.protocol.TMessageType.EXCEPTION;
+              msg = (org.apache.thrift.TBase)new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.INTERNAL_ERROR, e.getMessage());
+            }
+            try {
+              fcall.sendResponse(fb,msg,msgType,seqid);
+              return;
+            } catch (Exception ex) {
+              LOGGER.error("Exception writing to internal frame buffer", ex);
+            }
+            fb.close();
+          }
+        };
+      }
+
+      protected boolean isOneway() {
+        return false;
+      }
+
+      public void start(I iface, getOwnerResourceSummaries_args args, org.apache.thrift.async.AsyncMethodCallback<List<OwnerResourceSummary>> resultHandler) throws TException {
+        iface.getOwnerResourceSummaries(args.owner,resultHandler);
+      }
+    }
+
+    public static class processWorkerMetrics<I extends AsyncIface> extends org.apache.thrift.AsyncProcessFunction<I, processWorkerMetrics_args, Void> {
+      public processWorkerMetrics() {
+        super("processWorkerMetrics");
+      }
+
+      public processWorkerMetrics_args getEmptyArgsInstance() {
+        return new processWorkerMetrics_args();
+      }
+
+      public AsyncMethodCallback<Void> getResultHandler(final AsyncFrameBuffer fb, final int seqid) {
+        final org.apache.thrift.AsyncProcessFunction fcall = this;
+        return new AsyncMethodCallback<Void>() { 
+          public void onComplete(Void o) {
+            processWorkerMetrics_result result = new processWorkerMetrics_result();
+            try {
+              fcall.sendResponse(fb,result, org.apache.thrift.protocol.TMessageType.REPLY,seqid);
+              return;
+            } catch (Exception e) {
+              LOGGER.error("Exception writing to internal frame buffer", e);
+            }
+            fb.close();
+          }
+          public void onError(Exception e) {
+            byte msgType = org.apache.thrift.protocol.TMessageType.REPLY;
+            org.apache.thrift.TBase msg;
+            processWorkerMetrics_result result = new processWorkerMetrics_result();
+            {
+              msgType = org.apache.thrift.protocol.TMessageType.EXCEPTION;
+              msg = (org.apache.thrift.TBase)new org.apache.thrift.TApplicationException(org.apache.thrift.TApplicationException.INTERNAL_ERROR, e.getMessage());
+            }
+            try {
+              fcall.sendResponse(fb,msg,msgType,seqid);
+              return;
+            } catch (Exception ex) {
+              LOGGER.error("Exception writing to internal frame buffer", ex);
+            }
+            fb.close();
+          }
+        };
+      }
+
+      protected boolean isOneway() {
+        return false;
+      }
+
+      public void start(I iface, processWorkerMetrics_args args, org.apache.thrift.async.AsyncMethodCallback<Void> resultHandler) throws TException {
+        iface.processWorkerMetrics(args.metrics,resultHandler);
       }
     }
 
@@ -18142,14 +18415,14 @@ public class Nimbus {
             case 0: // SUCCESS
               if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
                 {
-                  org.apache.thrift.protocol.TList _list808 = iprot.readListBegin();
-                  struct.success = new ArrayList<ProfileRequest>(_list808.size);
-                  ProfileRequest _elem809;
-                  for (int _i810 = 0; _i810 < _list808.size; ++_i810)
+                  org.apache.thrift.protocol.TList _list894 = iprot.readListBegin();
+                  struct.success = new ArrayList<ProfileRequest>(_list894.size);
+                  ProfileRequest _elem895;
+                  for (int _i896 = 0; _i896 < _list894.size; ++_i896)
                   {
-                    _elem809 = new ProfileRequest();
-                    _elem809.read(iprot);
-                    struct.success.add(_elem809);
+                    _elem895 = new ProfileRequest();
+                    _elem895.read(iprot);
+                    struct.success.add(_elem895);
                   }
                   iprot.readListEnd();
                 }
@@ -18175,9 +18448,9 @@ public class Nimbus {
           oprot.writeFieldBegin(SUCCESS_FIELD_DESC);
           {
             oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.success.size()));
-            for (ProfileRequest _iter811 : struct.success)
+            for (ProfileRequest _iter897 : struct.success)
             {
-              _iter811.write(oprot);
+              _iter897.write(oprot);
             }
             oprot.writeListEnd();
           }
@@ -18208,9 +18481,9 @@ public class Nimbus {
         if (struct.is_set_success()) {
           {
             oprot.writeI32(struct.success.size());
-            for (ProfileRequest _iter812 : struct.success)
+            for (ProfileRequest _iter898 : struct.success)
             {
-              _iter812.write(oprot);
+              _iter898.write(oprot);
             }
           }
         }
@@ -18222,14 +18495,14 @@ public class Nimbus {
         BitSet incoming = iprot.readBitSet(1);
         if (incoming.get(0)) {
           {
-            org.apache.thrift.protocol.TList _list813 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
-            struct.success = new ArrayList<ProfileRequest>(_list813.size);
-            ProfileRequest _elem814;
-            for (int _i815 = 0; _i815 < _list813.size; ++_i815)
+            org.apache.thrift.protocol.TList _list899 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+            struct.success = new ArrayList<ProfileRequest>(_list899.size);
+            ProfileRequest _elem900;
+            for (int _i901 = 0; _i901 < _list899.size; ++_i901)
             {
-              _elem814 = new ProfileRequest();
-              _elem814.read(iprot);
-              struct.success.add(_elem814);
+              _elem900 = new ProfileRequest();
+              _elem900.read(iprot);
+              struct.success.add(_elem900);
             }
           }
           struct.set_success_isSet(true);
@@ -47233,6 +47506,1491 @@ public class Nimbus {
           struct.aze.read(iprot);
           struct.set_aze_isSet(true);
         }
+      }
+    }
+
+  }
+
+  public static class getOwnerResourceSummaries_args implements org.apache.thrift.TBase<getOwnerResourceSummaries_args, getOwnerResourceSummaries_args._Fields>, java.io.Serializable, Cloneable, Comparable<getOwnerResourceSummaries_args>   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("getOwnerResourceSummaries_args");
+
+    private static final org.apache.thrift.protocol.TField OWNER_FIELD_DESC = new org.apache.thrift.protocol.TField("owner", org.apache.thrift.protocol.TType.STRING, (short)1);
+
+    private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
+    static {
+      schemes.put(StandardScheme.class, new getOwnerResourceSummaries_argsStandardSchemeFactory());
+      schemes.put(TupleScheme.class, new getOwnerResourceSummaries_argsTupleSchemeFactory());
+    }
+
+    private String owner; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      OWNER((short)1, "owner");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 1: // OWNER
+            return OWNER;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.OWNER, new org.apache.thrift.meta_data.FieldMetaData("owner", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRING)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(getOwnerResourceSummaries_args.class, metaDataMap);
+    }
+
+    public getOwnerResourceSummaries_args() {
+    }
+
+    public getOwnerResourceSummaries_args(
+      String owner)
+    {
+      this();
+      this.owner = owner;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public getOwnerResourceSummaries_args(getOwnerResourceSummaries_args other) {
+      if (other.is_set_owner()) {
+        this.owner = other.owner;
+      }
+    }
+
+    public getOwnerResourceSummaries_args deepCopy() {
+      return new getOwnerResourceSummaries_args(this);
+    }
+
+    @Override
+    public void clear() {
+      this.owner = null;
+    }
+
+    public String get_owner() {
+      return this.owner;
+    }
+
+    public void set_owner(String owner) {
+      this.owner = owner;
+    }
+
+    public void unset_owner() {
+      this.owner = null;
+    }
+
+    /** Returns true if field owner is set (has been assigned a value) and false otherwise */
+    public boolean is_set_owner() {
+      return this.owner != null;
+    }
+
+    public void set_owner_isSet(boolean value) {
+      if (!value) {
+        this.owner = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case OWNER:
+        if (value == null) {
+          unset_owner();
+        } else {
+          set_owner((String)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case OWNER:
+        return get_owner();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case OWNER:
+        return is_set_owner();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof getOwnerResourceSummaries_args)
+        return this.equals((getOwnerResourceSummaries_args)that);
+      return false;
+    }
+
+    public boolean equals(getOwnerResourceSummaries_args that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_owner = true && this.is_set_owner();
+      boolean that_present_owner = true && that.is_set_owner();
+      if (this_present_owner || that_present_owner) {
+        if (!(this_present_owner && that_present_owner))
+          return false;
+        if (!this.owner.equals(that.owner))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      List<Object> list = new ArrayList<Object>();
+
+      boolean present_owner = true && (is_set_owner());
+      list.add(present_owner);
+      if (present_owner)
+        list.add(owner);
+
+      return list.hashCode();
+    }
+
+    @Override
+    public int compareTo(getOwnerResourceSummaries_args other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+
+      lastComparison = Boolean.valueOf(is_set_owner()).compareTo(other.is_set_owner());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (is_set_owner()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.owner, other.owner);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      schemes.get(iprot.getScheme()).getScheme().read(iprot, this);
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      schemes.get(oprot.getScheme()).getScheme().write(oprot, this);
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("getOwnerResourceSummaries_args(");
+      boolean first = true;
+
+      sb.append("owner:");
+      if (this.owner == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.owner);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+      // check for sub-struct validity
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private static class getOwnerResourceSummaries_argsStandardSchemeFactory implements SchemeFactory {
+      public getOwnerResourceSummaries_argsStandardScheme getScheme() {
+        return new getOwnerResourceSummaries_argsStandardScheme();
+      }
+    }
+
+    private static class getOwnerResourceSummaries_argsStandardScheme extends StandardScheme<getOwnerResourceSummaries_args> {
+
+      public void read(org.apache.thrift.protocol.TProtocol iprot, getOwnerResourceSummaries_args struct) throws org.apache.thrift.TException {
+        org.apache.thrift.protocol.TField schemeField;
+        iprot.readStructBegin();
+        while (true)
+        {
+          schemeField = iprot.readFieldBegin();
+          if (schemeField.type == org.apache.thrift.protocol.TType.STOP) { 
+            break;
+          }
+          switch (schemeField.id) {
+            case 1: // OWNER
+              if (schemeField.type == org.apache.thrift.protocol.TType.STRING) {
+                struct.owner = iprot.readString();
+                struct.set_owner_isSet(true);
+              } else { 
+                org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+              }
+              break;
+            default:
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+          }
+          iprot.readFieldEnd();
+        }
+        iprot.readStructEnd();
+        struct.validate();
+      }
+
+      public void write(org.apache.thrift.protocol.TProtocol oprot, getOwnerResourceSummaries_args struct) throws org.apache.thrift.TException {
+        struct.validate();
+
+        oprot.writeStructBegin(STRUCT_DESC);
+        if (struct.owner != null) {
+          oprot.writeFieldBegin(OWNER_FIELD_DESC);
+          oprot.writeString(struct.owner);
+          oprot.writeFieldEnd();
+        }
+        oprot.writeFieldStop();
+        oprot.writeStructEnd();
+      }
+
+    }
+
+    private static class getOwnerResourceSummaries_argsTupleSchemeFactory implements SchemeFactory {
+      public getOwnerResourceSummaries_argsTupleScheme getScheme() {
+        return new getOwnerResourceSummaries_argsTupleScheme();
+      }
+    }
+
+    private static class getOwnerResourceSummaries_argsTupleScheme extends TupleScheme<getOwnerResourceSummaries_args> {
+
+      @Override
+      public void write(org.apache.thrift.protocol.TProtocol prot, getOwnerResourceSummaries_args struct) throws org.apache.thrift.TException {
+        TTupleProtocol oprot = (TTupleProtocol) prot;
+        BitSet optionals = new BitSet();
+        if (struct.is_set_owner()) {
+          optionals.set(0);
+        }
+        oprot.writeBitSet(optionals, 1);
+        if (struct.is_set_owner()) {
+          oprot.writeString(struct.owner);
+        }
+      }
+
+      @Override
+      public void read(org.apache.thrift.protocol.TProtocol prot, getOwnerResourceSummaries_args struct) throws org.apache.thrift.TException {
+        TTupleProtocol iprot = (TTupleProtocol) prot;
+        BitSet incoming = iprot.readBitSet(1);
+        if (incoming.get(0)) {
+          struct.owner = iprot.readString();
+          struct.set_owner_isSet(true);
+        }
+      }
+    }
+
+  }
+
+  public static class getOwnerResourceSummaries_result implements org.apache.thrift.TBase<getOwnerResourceSummaries_result, getOwnerResourceSummaries_result._Fields>, java.io.Serializable, Cloneable, Comparable<getOwnerResourceSummaries_result>   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("getOwnerResourceSummaries_result");
+
+    private static final org.apache.thrift.protocol.TField SUCCESS_FIELD_DESC = new org.apache.thrift.protocol.TField("success", org.apache.thrift.protocol.TType.LIST, (short)0);
+    private static final org.apache.thrift.protocol.TField AZE_FIELD_DESC = new org.apache.thrift.protocol.TField("aze", org.apache.thrift.protocol.TType.STRUCT, (short)1);
+
+    private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
+    static {
+      schemes.put(StandardScheme.class, new getOwnerResourceSummaries_resultStandardSchemeFactory());
+      schemes.put(TupleScheme.class, new getOwnerResourceSummaries_resultTupleSchemeFactory());
+    }
+
+    private List<OwnerResourceSummary> success; // required
+    private AuthorizationException aze; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      SUCCESS((short)0, "success"),
+      AZE((short)1, "aze");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 0: // SUCCESS
+            return SUCCESS;
+          case 1: // AZE
+            return AZE;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.SUCCESS, new org.apache.thrift.meta_data.FieldMetaData("success", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.ListMetaData(org.apache.thrift.protocol.TType.LIST, 
+              new org.apache.thrift.meta_data.StructMetaData(org.apache.thrift.protocol.TType.STRUCT, OwnerResourceSummary.class))));
+      tmpMap.put(_Fields.AZE, new org.apache.thrift.meta_data.FieldMetaData("aze", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.FieldValueMetaData(org.apache.thrift.protocol.TType.STRUCT)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(getOwnerResourceSummaries_result.class, metaDataMap);
+    }
+
+    public getOwnerResourceSummaries_result() {
+    }
+
+    public getOwnerResourceSummaries_result(
+      List<OwnerResourceSummary> success,
+      AuthorizationException aze)
+    {
+      this();
+      this.success = success;
+      this.aze = aze;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public getOwnerResourceSummaries_result(getOwnerResourceSummaries_result other) {
+      if (other.is_set_success()) {
+        List<OwnerResourceSummary> __this__success = new ArrayList<OwnerResourceSummary>(other.success.size());
+        for (OwnerResourceSummary other_element : other.success) {
+          __this__success.add(new OwnerResourceSummary(other_element));
+        }
+        this.success = __this__success;
+      }
+      if (other.is_set_aze()) {
+        this.aze = new AuthorizationException(other.aze);
+      }
+    }
+
+    public getOwnerResourceSummaries_result deepCopy() {
+      return new getOwnerResourceSummaries_result(this);
+    }
+
+    @Override
+    public void clear() {
+      this.success = null;
+      this.aze = null;
+    }
+
+    public int get_success_size() {
+      return (this.success == null) ? 0 : this.success.size();
+    }
+
+    public java.util.Iterator<OwnerResourceSummary> get_success_iterator() {
+      return (this.success == null) ? null : this.success.iterator();
+    }
+
+    public void add_to_success(OwnerResourceSummary elem) {
+      if (this.success == null) {
+        this.success = new ArrayList<OwnerResourceSummary>();
+      }
+      this.success.add(elem);
+    }
+
+    public List<OwnerResourceSummary> get_success() {
+      return this.success;
+    }
+
+    public void set_success(List<OwnerResourceSummary> success) {
+      this.success = success;
+    }
+
+    public void unset_success() {
+      this.success = null;
+    }
+
+    /** Returns true if field success is set (has been assigned a value) and false otherwise */
+    public boolean is_set_success() {
+      return this.success != null;
+    }
+
+    public void set_success_isSet(boolean value) {
+      if (!value) {
+        this.success = null;
+      }
+    }
+
+    public AuthorizationException get_aze() {
+      return this.aze;
+    }
+
+    public void set_aze(AuthorizationException aze) {
+      this.aze = aze;
+    }
+
+    public void unset_aze() {
+      this.aze = null;
+    }
+
+    /** Returns true if field aze is set (has been assigned a value) and false otherwise */
+    public boolean is_set_aze() {
+      return this.aze != null;
+    }
+
+    public void set_aze_isSet(boolean value) {
+      if (!value) {
+        this.aze = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case SUCCESS:
+        if (value == null) {
+          unset_success();
+        } else {
+          set_success((List<OwnerResourceSummary>)value);
+        }
+        break;
+
+      case AZE:
+        if (value == null) {
+          unset_aze();
+        } else {
+          set_aze((AuthorizationException)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case SUCCESS:
+        return get_success();
+
+      case AZE:
+        return get_aze();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case SUCCESS:
+        return is_set_success();
+      case AZE:
+        return is_set_aze();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof getOwnerResourceSummaries_result)
+        return this.equals((getOwnerResourceSummaries_result)that);
+      return false;
+    }
+
+    public boolean equals(getOwnerResourceSummaries_result that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_success = true && this.is_set_success();
+      boolean that_present_success = true && that.is_set_success();
+      if (this_present_success || that_present_success) {
+        if (!(this_present_success && that_present_success))
+          return false;
+        if (!this.success.equals(that.success))
+          return false;
+      }
+
+      boolean this_present_aze = true && this.is_set_aze();
+      boolean that_present_aze = true && that.is_set_aze();
+      if (this_present_aze || that_present_aze) {
+        if (!(this_present_aze && that_present_aze))
+          return false;
+        if (!this.aze.equals(that.aze))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      List<Object> list = new ArrayList<Object>();
+
+      boolean present_success = true && (is_set_success());
+      list.add(present_success);
+      if (present_success)
+        list.add(success);
+
+      boolean present_aze = true && (is_set_aze());
+      list.add(present_aze);
+      if (present_aze)
+        list.add(aze);
+
+      return list.hashCode();
+    }
+
+    @Override
+    public int compareTo(getOwnerResourceSummaries_result other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+
+      lastComparison = Boolean.valueOf(is_set_success()).compareTo(other.is_set_success());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (is_set_success()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.success, other.success);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      lastComparison = Boolean.valueOf(is_set_aze()).compareTo(other.is_set_aze());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (is_set_aze()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.aze, other.aze);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      schemes.get(iprot.getScheme()).getScheme().read(iprot, this);
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      schemes.get(oprot.getScheme()).getScheme().write(oprot, this);
+      }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("getOwnerResourceSummaries_result(");
+      boolean first = true;
+
+      sb.append("success:");
+      if (this.success == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.success);
+      }
+      first = false;
+      if (!first) sb.append(", ");
+      sb.append("aze:");
+      if (this.aze == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.aze);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+      // check for sub-struct validity
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private static class getOwnerResourceSummaries_resultStandardSchemeFactory implements SchemeFactory {
+      public getOwnerResourceSummaries_resultStandardScheme getScheme() {
+        return new getOwnerResourceSummaries_resultStandardScheme();
+      }
+    }
+
+    private static class getOwnerResourceSummaries_resultStandardScheme extends StandardScheme<getOwnerResourceSummaries_result> {
+
+      public void read(org.apache.thrift.protocol.TProtocol iprot, getOwnerResourceSummaries_result struct) throws org.apache.thrift.TException {
+        org.apache.thrift.protocol.TField schemeField;
+        iprot.readStructBegin();
+        while (true)
+        {
+          schemeField = iprot.readFieldBegin();
+          if (schemeField.type == org.apache.thrift.protocol.TType.STOP) { 
+            break;
+          }
+          switch (schemeField.id) {
+            case 0: // SUCCESS
+              if (schemeField.type == org.apache.thrift.protocol.TType.LIST) {
+                {
+                  org.apache.thrift.protocol.TList _list902 = iprot.readListBegin();
+                  struct.success = new ArrayList<OwnerResourceSummary>(_list902.size);
+                  OwnerResourceSummary _elem903;
+                  for (int _i904 = 0; _i904 < _list902.size; ++_i904)
+                  {
+                    _elem903 = new OwnerResourceSummary();
+                    _elem903.read(iprot);
+                    struct.success.add(_elem903);
+                  }
+                  iprot.readListEnd();
+                }
+                struct.set_success_isSet(true);
+              } else { 
+                org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+              }
+              break;
+            case 1: // AZE
+              if (schemeField.type == org.apache.thrift.protocol.TType.STRUCT) {
+                struct.aze = new AuthorizationException();
+                struct.aze.read(iprot);
+                struct.set_aze_isSet(true);
+              } else { 
+                org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+              }
+              break;
+            default:
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+          }
+          iprot.readFieldEnd();
+        }
+        iprot.readStructEnd();
+        struct.validate();
+      }
+
+      public void write(org.apache.thrift.protocol.TProtocol oprot, getOwnerResourceSummaries_result struct) throws org.apache.thrift.TException {
+        struct.validate();
+
+        oprot.writeStructBegin(STRUCT_DESC);
+        if (struct.success != null) {
+          oprot.writeFieldBegin(SUCCESS_FIELD_DESC);
+          {
+            oprot.writeListBegin(new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, struct.success.size()));
+            for (OwnerResourceSummary _iter905 : struct.success)
+            {
+              _iter905.write(oprot);
+            }
+            oprot.writeListEnd();
+          }
+          oprot.writeFieldEnd();
+        }
+        if (struct.aze != null) {
+          oprot.writeFieldBegin(AZE_FIELD_DESC);
+          struct.aze.write(oprot);
+          oprot.writeFieldEnd();
+        }
+        oprot.writeFieldStop();
+        oprot.writeStructEnd();
+      }
+
+    }
+
+    private static class getOwnerResourceSummaries_resultTupleSchemeFactory implements SchemeFactory {
+      public getOwnerResourceSummaries_resultTupleScheme getScheme() {
+        return new getOwnerResourceSummaries_resultTupleScheme();
+      }
+    }
+
+    private static class getOwnerResourceSummaries_resultTupleScheme extends TupleScheme<getOwnerResourceSummaries_result> {
+
+      @Override
+      public void write(org.apache.thrift.protocol.TProtocol prot, getOwnerResourceSummaries_result struct) throws org.apache.thrift.TException {
+        TTupleProtocol oprot = (TTupleProtocol) prot;
+        BitSet optionals = new BitSet();
+        if (struct.is_set_success()) {
+          optionals.set(0);
+        }
+        if (struct.is_set_aze()) {
+          optionals.set(1);
+        }
+        oprot.writeBitSet(optionals, 2);
+        if (struct.is_set_success()) {
+          {
+            oprot.writeI32(struct.success.size());
+            for (OwnerResourceSummary _iter906 : struct.success)
+            {
+              _iter906.write(oprot);
+            }
+          }
+        }
+        if (struct.is_set_aze()) {
+          struct.aze.write(oprot);
+        }
+      }
+
+      @Override
+      public void read(org.apache.thrift.protocol.TProtocol prot, getOwnerResourceSummaries_result struct) throws org.apache.thrift.TException {
+        TTupleProtocol iprot = (TTupleProtocol) prot;
+        BitSet incoming = iprot.readBitSet(2);
+        if (incoming.get(0)) {
+          {
+            org.apache.thrift.protocol.TList _list907 = new org.apache.thrift.protocol.TList(org.apache.thrift.protocol.TType.STRUCT, iprot.readI32());
+            struct.success = new ArrayList<OwnerResourceSummary>(_list907.size);
+            OwnerResourceSummary _elem908;
+            for (int _i909 = 0; _i909 < _list907.size; ++_i909)
+            {
+              _elem908 = new OwnerResourceSummary();
+              _elem908.read(iprot);
+              struct.success.add(_elem908);
+            }
+          }
+          struct.set_success_isSet(true);
+        }
+        if (incoming.get(1)) {
+          struct.aze = new AuthorizationException();
+          struct.aze.read(iprot);
+          struct.set_aze_isSet(true);
+        }
+      }
+    }
+
+  }
+
+  public static class processWorkerMetrics_args implements org.apache.thrift.TBase<processWorkerMetrics_args, processWorkerMetrics_args._Fields>, java.io.Serializable, Cloneable, Comparable<processWorkerMetrics_args>   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("processWorkerMetrics_args");
+
+    private static final org.apache.thrift.protocol.TField METRICS_FIELD_DESC = new org.apache.thrift.protocol.TField("metrics", org.apache.thrift.protocol.TType.STRUCT, (short)1);
+
+    private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
+    static {
+      schemes.put(StandardScheme.class, new processWorkerMetrics_argsStandardSchemeFactory());
+      schemes.put(TupleScheme.class, new processWorkerMetrics_argsTupleSchemeFactory());
+    }
+
+    private WorkerMetrics metrics; // required
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+      METRICS((short)1, "metrics");
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          case 1: // METRICS
+            return METRICS;
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+
+    // isset id assignments
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      tmpMap.put(_Fields.METRICS, new org.apache.thrift.meta_data.FieldMetaData("metrics", org.apache.thrift.TFieldRequirementType.DEFAULT, 
+          new org.apache.thrift.meta_data.StructMetaData(org.apache.thrift.protocol.TType.STRUCT, WorkerMetrics.class)));
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(processWorkerMetrics_args.class, metaDataMap);
+    }
+
+    public processWorkerMetrics_args() {
+    }
+
+    public processWorkerMetrics_args(
+      WorkerMetrics metrics)
+    {
+      this();
+      this.metrics = metrics;
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public processWorkerMetrics_args(processWorkerMetrics_args other) {
+      if (other.is_set_metrics()) {
+        this.metrics = new WorkerMetrics(other.metrics);
+      }
+    }
+
+    public processWorkerMetrics_args deepCopy() {
+      return new processWorkerMetrics_args(this);
+    }
+
+    @Override
+    public void clear() {
+      this.metrics = null;
+    }
+
+    public WorkerMetrics get_metrics() {
+      return this.metrics;
+    }
+
+    public void set_metrics(WorkerMetrics metrics) {
+      this.metrics = metrics;
+    }
+
+    public void unset_metrics() {
+      this.metrics = null;
+    }
+
+    /** Returns true if field metrics is set (has been assigned a value) and false otherwise */
+    public boolean is_set_metrics() {
+      return this.metrics != null;
+    }
+
+    public void set_metrics_isSet(boolean value) {
+      if (!value) {
+        this.metrics = null;
+      }
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      case METRICS:
+        if (value == null) {
+          unset_metrics();
+        } else {
+          set_metrics((WorkerMetrics)value);
+        }
+        break;
+
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      case METRICS:
+        return get_metrics();
+
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      case METRICS:
+        return is_set_metrics();
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof processWorkerMetrics_args)
+        return this.equals((processWorkerMetrics_args)that);
+      return false;
+    }
+
+    public boolean equals(processWorkerMetrics_args that) {
+      if (that == null)
+        return false;
+
+      boolean this_present_metrics = true && this.is_set_metrics();
+      boolean that_present_metrics = true && that.is_set_metrics();
+      if (this_present_metrics || that_present_metrics) {
+        if (!(this_present_metrics && that_present_metrics))
+          return false;
+        if (!this.metrics.equals(that.metrics))
+          return false;
+      }
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      List<Object> list = new ArrayList<Object>();
+
+      boolean present_metrics = true && (is_set_metrics());
+      list.add(present_metrics);
+      if (present_metrics)
+        list.add(metrics);
+
+      return list.hashCode();
+    }
+
+    @Override
+    public int compareTo(processWorkerMetrics_args other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+
+      lastComparison = Boolean.valueOf(is_set_metrics()).compareTo(other.is_set_metrics());
+      if (lastComparison != 0) {
+        return lastComparison;
+      }
+      if (is_set_metrics()) {
+        lastComparison = org.apache.thrift.TBaseHelper.compareTo(this.metrics, other.metrics);
+        if (lastComparison != 0) {
+          return lastComparison;
+        }
+      }
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      schemes.get(iprot.getScheme()).getScheme().read(iprot, this);
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      schemes.get(oprot.getScheme()).getScheme().write(oprot, this);
+    }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("processWorkerMetrics_args(");
+      boolean first = true;
+
+      sb.append("metrics:");
+      if (this.metrics == null) {
+        sb.append("null");
+      } else {
+        sb.append(this.metrics);
+      }
+      first = false;
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+      // check for sub-struct validity
+      if (metrics != null) {
+        metrics.validate();
+      }
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private static class processWorkerMetrics_argsStandardSchemeFactory implements SchemeFactory {
+      public processWorkerMetrics_argsStandardScheme getScheme() {
+        return new processWorkerMetrics_argsStandardScheme();
+      }
+    }
+
+    private static class processWorkerMetrics_argsStandardScheme extends StandardScheme<processWorkerMetrics_args> {
+
+      public void read(org.apache.thrift.protocol.TProtocol iprot, processWorkerMetrics_args struct) throws org.apache.thrift.TException {
+        org.apache.thrift.protocol.TField schemeField;
+        iprot.readStructBegin();
+        while (true)
+        {
+          schemeField = iprot.readFieldBegin();
+          if (schemeField.type == org.apache.thrift.protocol.TType.STOP) { 
+            break;
+          }
+          switch (schemeField.id) {
+            case 1: // METRICS
+              if (schemeField.type == org.apache.thrift.protocol.TType.STRUCT) {
+                struct.metrics = new WorkerMetrics();
+                struct.metrics.read(iprot);
+                struct.set_metrics_isSet(true);
+              } else { 
+                org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+              }
+              break;
+            default:
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+          }
+          iprot.readFieldEnd();
+        }
+        iprot.readStructEnd();
+        struct.validate();
+      }
+
+      public void write(org.apache.thrift.protocol.TProtocol oprot, processWorkerMetrics_args struct) throws org.apache.thrift.TException {
+        struct.validate();
+
+        oprot.writeStructBegin(STRUCT_DESC);
+        if (struct.metrics != null) {
+          oprot.writeFieldBegin(METRICS_FIELD_DESC);
+          struct.metrics.write(oprot);
+          oprot.writeFieldEnd();
+        }
+        oprot.writeFieldStop();
+        oprot.writeStructEnd();
+      }
+
+    }
+
+    private static class processWorkerMetrics_argsTupleSchemeFactory implements SchemeFactory {
+      public processWorkerMetrics_argsTupleScheme getScheme() {
+        return new processWorkerMetrics_argsTupleScheme();
+      }
+    }
+
+    private static class processWorkerMetrics_argsTupleScheme extends TupleScheme<processWorkerMetrics_args> {
+
+      @Override
+      public void write(org.apache.thrift.protocol.TProtocol prot, processWorkerMetrics_args struct) throws org.apache.thrift.TException {
+        TTupleProtocol oprot = (TTupleProtocol) prot;
+        BitSet optionals = new BitSet();
+        if (struct.is_set_metrics()) {
+          optionals.set(0);
+        }
+        oprot.writeBitSet(optionals, 1);
+        if (struct.is_set_metrics()) {
+          struct.metrics.write(oprot);
+        }
+      }
+
+      @Override
+      public void read(org.apache.thrift.protocol.TProtocol prot, processWorkerMetrics_args struct) throws org.apache.thrift.TException {
+        TTupleProtocol iprot = (TTupleProtocol) prot;
+        BitSet incoming = iprot.readBitSet(1);
+        if (incoming.get(0)) {
+          struct.metrics = new WorkerMetrics();
+          struct.metrics.read(iprot);
+          struct.set_metrics_isSet(true);
+        }
+      }
+    }
+
+  }
+
+  public static class processWorkerMetrics_result implements org.apache.thrift.TBase<processWorkerMetrics_result, processWorkerMetrics_result._Fields>, java.io.Serializable, Cloneable, Comparable<processWorkerMetrics_result>   {
+    private static final org.apache.thrift.protocol.TStruct STRUCT_DESC = new org.apache.thrift.protocol.TStruct("processWorkerMetrics_result");
+
+
+    private static final Map<Class<? extends IScheme>, SchemeFactory> schemes = new HashMap<Class<? extends IScheme>, SchemeFactory>();
+    static {
+      schemes.put(StandardScheme.class, new processWorkerMetrics_resultStandardSchemeFactory());
+      schemes.put(TupleScheme.class, new processWorkerMetrics_resultTupleSchemeFactory());
+    }
+
+
+    /** The set of fields this struct contains, along with convenience methods for finding and manipulating them. */
+    public enum _Fields implements org.apache.thrift.TFieldIdEnum {
+;
+
+      private static final Map<String, _Fields> byName = new HashMap<String, _Fields>();
+
+      static {
+        for (_Fields field : EnumSet.allOf(_Fields.class)) {
+          byName.put(field.getFieldName(), field);
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, or null if its not found.
+       */
+      public static _Fields findByThriftId(int fieldId) {
+        switch(fieldId) {
+          default:
+            return null;
+        }
+      }
+
+      /**
+       * Find the _Fields constant that matches fieldId, throwing an exception
+       * if it is not found.
+       */
+      public static _Fields findByThriftIdOrThrow(int fieldId) {
+        _Fields fields = findByThriftId(fieldId);
+        if (fields == null) throw new IllegalArgumentException("Field " + fieldId + " doesn't exist!");
+        return fields;
+      }
+
+      /**
+       * Find the _Fields constant that matches name, or null if its not found.
+       */
+      public static _Fields findByName(String name) {
+        return byName.get(name);
+      }
+
+      private final short _thriftId;
+      private final String _fieldName;
+
+      _Fields(short thriftId, String fieldName) {
+        _thriftId = thriftId;
+        _fieldName = fieldName;
+      }
+
+      public short getThriftFieldId() {
+        return _thriftId;
+      }
+
+      public String getFieldName() {
+        return _fieldName;
+      }
+    }
+    public static final Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> metaDataMap;
+    static {
+      Map<_Fields, org.apache.thrift.meta_data.FieldMetaData> tmpMap = new EnumMap<_Fields, org.apache.thrift.meta_data.FieldMetaData>(_Fields.class);
+      metaDataMap = Collections.unmodifiableMap(tmpMap);
+      org.apache.thrift.meta_data.FieldMetaData.addStructMetaDataMap(processWorkerMetrics_result.class, metaDataMap);
+    }
+
+    public processWorkerMetrics_result() {
+    }
+
+    /**
+     * Performs a deep copy on <i>other</i>.
+     */
+    public processWorkerMetrics_result(processWorkerMetrics_result other) {
+    }
+
+    public processWorkerMetrics_result deepCopy() {
+      return new processWorkerMetrics_result(this);
+    }
+
+    @Override
+    public void clear() {
+    }
+
+    public void setFieldValue(_Fields field, Object value) {
+      switch (field) {
+      }
+    }
+
+    public Object getFieldValue(_Fields field) {
+      switch (field) {
+      }
+      throw new IllegalStateException();
+    }
+
+    /** Returns true if field corresponding to fieldID is set (has been assigned a value) and false otherwise */
+    public boolean isSet(_Fields field) {
+      if (field == null) {
+        throw new IllegalArgumentException();
+      }
+
+      switch (field) {
+      }
+      throw new IllegalStateException();
+    }
+
+    @Override
+    public boolean equals(Object that) {
+      if (that == null)
+        return false;
+      if (that instanceof processWorkerMetrics_result)
+        return this.equals((processWorkerMetrics_result)that);
+      return false;
+    }
+
+    public boolean equals(processWorkerMetrics_result that) {
+      if (that == null)
+        return false;
+
+      return true;
+    }
+
+    @Override
+    public int hashCode() {
+      List<Object> list = new ArrayList<Object>();
+
+      return list.hashCode();
+    }
+
+    @Override
+    public int compareTo(processWorkerMetrics_result other) {
+      if (!getClass().equals(other.getClass())) {
+        return getClass().getName().compareTo(other.getClass().getName());
+      }
+
+      int lastComparison = 0;
+
+      return 0;
+    }
+
+    public _Fields fieldForId(int fieldId) {
+      return _Fields.findByThriftId(fieldId);
+    }
+
+    public void read(org.apache.thrift.protocol.TProtocol iprot) throws org.apache.thrift.TException {
+      schemes.get(iprot.getScheme()).getScheme().read(iprot, this);
+    }
+
+    public void write(org.apache.thrift.protocol.TProtocol oprot) throws org.apache.thrift.TException {
+      schemes.get(oprot.getScheme()).getScheme().write(oprot, this);
+      }
+
+    @Override
+    public String toString() {
+      StringBuilder sb = new StringBuilder("processWorkerMetrics_result(");
+      boolean first = true;
+
+      sb.append(")");
+      return sb.toString();
+    }
+
+    public void validate() throws org.apache.thrift.TException {
+      // check for required fields
+      // check for sub-struct validity
+    }
+
+    private void writeObject(java.io.ObjectOutputStream out) throws java.io.IOException {
+      try {
+        write(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(out)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private void readObject(java.io.ObjectInputStream in) throws java.io.IOException, ClassNotFoundException {
+      try {
+        read(new org.apache.thrift.protocol.TCompactProtocol(new org.apache.thrift.transport.TIOStreamTransport(in)));
+      } catch (org.apache.thrift.TException te) {
+        throw new java.io.IOException(te);
+      }
+    }
+
+    private static class processWorkerMetrics_resultStandardSchemeFactory implements SchemeFactory {
+      public processWorkerMetrics_resultStandardScheme getScheme() {
+        return new processWorkerMetrics_resultStandardScheme();
+      }
+    }
+
+    private static class processWorkerMetrics_resultStandardScheme extends StandardScheme<processWorkerMetrics_result> {
+
+      public void read(org.apache.thrift.protocol.TProtocol iprot, processWorkerMetrics_result struct) throws org.apache.thrift.TException {
+        org.apache.thrift.protocol.TField schemeField;
+        iprot.readStructBegin();
+        while (true)
+        {
+          schemeField = iprot.readFieldBegin();
+          if (schemeField.type == org.apache.thrift.protocol.TType.STOP) { 
+            break;
+          }
+          switch (schemeField.id) {
+            default:
+              org.apache.thrift.protocol.TProtocolUtil.skip(iprot, schemeField.type);
+          }
+          iprot.readFieldEnd();
+        }
+        iprot.readStructEnd();
+        struct.validate();
+      }
+
+      public void write(org.apache.thrift.protocol.TProtocol oprot, processWorkerMetrics_result struct) throws org.apache.thrift.TException {
+        struct.validate();
+
+        oprot.writeStructBegin(STRUCT_DESC);
+        oprot.writeFieldStop();
+        oprot.writeStructEnd();
+      }
+
+    }
+
+    private static class processWorkerMetrics_resultTupleSchemeFactory implements SchemeFactory {
+      public processWorkerMetrics_resultTupleScheme getScheme() {
+        return new processWorkerMetrics_resultTupleScheme();
+      }
+    }
+
+    private static class processWorkerMetrics_resultTupleScheme extends TupleScheme<processWorkerMetrics_result> {
+
+      @Override
+      public void write(org.apache.thrift.protocol.TProtocol prot, processWorkerMetrics_result struct) throws org.apache.thrift.TException {
+        TTupleProtocol oprot = (TTupleProtocol) prot;
+      }
+
+      @Override
+      public void read(org.apache.thrift.protocol.TProtocol prot, processWorkerMetrics_result struct) throws org.apache.thrift.TException {
+        TTupleProtocol iprot = (TTupleProtocol) prot;
       }
     }
 

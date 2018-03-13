@@ -30,11 +30,6 @@
     <dependencies>
         <dependency>
             <groupId>org.apache.storm</groupId>
-            <artifactId>storm-starter</artifactId>
-            <version>${project.version}</version>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.storm</groupId>
             <artifactId>storm-client</artifactId>
             <version>${project.version}</version>
             <scope>${provided.scope}</scope>
@@ -43,19 +38,19 @@
             <groupId>org.apache.storm</groupId>
             <artifactId>storm-kafka</artifactId>
             <version>${project.version}</version>
-            <scope>${provided.scope}</scope>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>${storm.kafka.artifact.id}</artifactId>
             <version>${storm.kafka.version}</version>
-            <scope>${provided.scope}</scope>
+            <scope>compile</scope>
         </dependency>
         <dependency>
             <groupId>org.apache.kafka</groupId>
             <artifactId>kafka-clients</artifactId>
             <version>${storm.kafka.version}</version>
-            <scope>${provided.scope}</scope>
+            <scope>compile</scope>
         </dependency>
     </dependencies>
 

@@ -229,7 +229,7 @@ public class TopoWrap {
     public void assertProgress(int minEmits, String componentName, int maxWaitSec) throws TException {
         waitForProgress(minEmits, componentName, maxWaitSec);
         long emitCount = getAllTimeEmittedCount(componentName);
-        Assert.assertTrue(emitCount >= minEmits, "Count for component " + componentName + " is " + emitCount + " min is " + minEmits);
+        Assert.assertTrue(emitCount >= minEmits, "Emit count for component '" + componentName + "' is " + emitCount + ", min is " + minEmits);
     }
 
     public static class ExecutorURL {
@@ -261,8 +261,8 @@ public class TopoWrap {
 
         public ExecutorURL(String componentId, String host, int logViewerPort, int executorPort, String topoId) throws MalformedURLException {
             String sep = "%2F"; //hex of "/"
-            String viewUrlStr = String.format("http://%s:%s/log?file=", host, logViewerPort);
-            String downloadUrlStr = String.format("http://%s:%s/download?file=%%2F", host, logViewerPort);
+            String viewUrlStr = String.format("http://%s:%s/api/v1/log?file=", host, logViewerPort);
+            String downloadUrlStr = String.format("http://%s:%s/api/v1/download?file=%%2F", host, logViewerPort);
             viewUrl = new URL(String.format("%s/%s%s%d%sworker.log", viewUrlStr, topoId, sep, executorPort, sep));
             downloadUrl = new URL(String.format("%s/%s%s%d%sworker.log", downloadUrlStr, topoId, sep, executorPort, sep));
             this.componentId = componentId;
@@ -373,7 +373,7 @@ public class TopoWrap {
         return retVal;
     }
 
-    public void killQuietly() {
-        cluster.killSilently(name);
+    public void killOrThrow() throws Exception {
+        cluster.killOrThrow(name);
     }
 }

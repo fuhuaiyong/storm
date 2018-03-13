@@ -18,17 +18,31 @@
 
 package org.apache.storm;
 
+import static org.apache.storm.validation.ConfigValidationAnnotations.isInteger;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isPositiveNumber;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isString;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isStringList;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isStringOrStringList;
+import static org.apache.storm.validation.ConfigValidationAnnotations.NotNull;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isListEntryCustom;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isBoolean;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isNumber;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isImplementationOfClass;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isMapEntryType;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isNoDuplicateInList;
+import static org.apache.storm.validation.ConfigValidationAnnotations.isMapEntryCustom;
+
 import org.apache.storm.container.ResourceIsolationInterface;
 import org.apache.storm.nimbus.ITopologyActionNotifierPlugin;
-import org.apache.storm.scheduler.resource.strategies.eviction.IEvictionStrategy;
+import org.apache.storm.scheduler.blacklist.reporters.IReporter;
+import org.apache.storm.scheduler.blacklist.strategies.IBlacklistStrategy;
 import org.apache.storm.scheduler.resource.strategies.priority.ISchedulingPriorityStrategy;
+import org.apache.storm.scheduler.resource.strategies.scheduling.IStrategy;
 import org.apache.storm.validation.ConfigValidation;
 import org.apache.storm.validation.Validated;
 
 import java.util.ArrayList;
 import java.util.Map;
-
-import static org.apache.storm.validation.ConfigValidationAnnotations.*;
 
 /**
  * Storm configs are specified as a plain old map. This class provides constants for
@@ -41,7 +55,7 @@ import static org.apache.storm.validation.ConfigValidationAnnotations.*;
 public class DaemonConfig implements Validated {
 
     /**
-     * We check with this interval that whether the Netty channel is writable and try to write pending messages
+     * We check with this interval that whether the Netty channel is writable and try to write pending messages.
      */
     @isInteger
     public static final String STORM_NETTY_FLUSH_CHECK_INTERVAL_MS = "storm.messaging.netty.flush.check.interval.ms";
@@ -102,21 +116,45 @@ public class DaemonConfig implements Validated {
     public static final String STORM_SCHEDULER = "storm.scheduler";
 
     /**
+     * The number of seconds that the blacklist scheduler will concern of bad slots or supervisors.
+     */
+    @isPositiveNumber
+    public static final String BLACKLIST_SCHEDULER_TOLERANCE_TIME = "blacklist.scheduler.tolerance.time.secs";
+
+    /**
+     * The number of hit count that will trigger blacklist in tolerance time.
+     */
+    @isPositiveNumber
+    public static final String BLACKLIST_SCHEDULER_TOLERANCE_COUNT = "blacklist.scheduler.tolerance.count";
+
+    /**
+     * The number of seconds that the blacklisted slots or supervisor will be resumed.
+     */
+    @isPositiveNumber
+    public static final String BLACKLIST_SCHEDULER_RESUME_TIME = "blacklist.scheduler.resume.time.secs";
+
+    /**
+     * The class that the blacklist scheduler will report the blacklist.
+     */
+    @NotNull
+    @isImplementationOfClass(implementsClass = IReporter.class)
+    public static final String BLACKLIST_SCHEDULER_REPORTER = "blacklist.scheduler.reporter";
+
+    /**
+     * The class that specifies the eviction strategy to use in blacklist scheduler.
+     */
+    @NotNull
+    @isImplementationOfClass(implementsClass = IBlacklistStrategy.class)
+    public static final String BLACKLIST_SCHEDULER_STRATEGY = "blacklist.scheduler.strategy";
+
+    /**
      * Whether we want to display all the resource capacity and scheduled usage on the UI page.
      * You MUST have this variable set if you are using any kind of resource-related scheduler.
-     *
+     * <p/>
      * If this is not set, we will not display resource capacity and usage on the UI.
      */
     @isBoolean
     public static final String SCHEDULER_DISPLAY_RESOURCE = "scheduler.display.resource";
-
-    /**
-     * Initialization parameters for the group mapping service plugin.
-     * Provides a way for a @link{STORM_GROUP_MAPPING_SERVICE_PROVIDER_PLUGIN}
-     * implementation to access optional settings.
-     */
-    @isType(type=Map.class)
-    public static final String STORM_GROUP_MAPPING_SERVICE_PARAMS = "storm.group.mapping.service.params";
 
     /**
      * The directory where storm's health scripts go.
@@ -126,7 +164,7 @@ public class DaemonConfig implements Validated {
 
     /**
      * The time to allow any given healthcheck script to run before it
-     * is marked failed due to timeout
+     * is marked failed due to timeout.
      */
     @isNumber
     public static final String STORM_HEALTH_CHECK_TIMEOUT_MS = "storm.health.check.timeout.ms";
@@ -220,7 +258,7 @@ public class DaemonConfig implements Validated {
     public static final String NIMBUS_TOPOLOGY_VALIDATOR = "nimbus.topology.validator";
 
     /**
-     * Class name for authorization plugin for Nimbus
+     * Class name for authorization plugin for Nimbus.
      */
     @isString
     public static final String NIMBUS_AUTHORIZER = "nimbus.authorizer";
@@ -270,7 +308,14 @@ public class DaemonConfig implements Validated {
     public static final String UI_CENTRAL_LOGGING_URL = "ui.central.logging.url";
 
     /**
-     * HTTP UI port for log viewer
+     * Storm UI drop-down pagination value. Set ui.pagination to be a positive integer
+     * or -1 (displays all entries). Valid values: -1, 10, 20, 25 etc.
+     */
+    @isInteger
+    public static final String UI_PAGINATION = "ui.pagination";
+
+    /**
+     * HTTP UI port for log viewer.
      */
     @isInteger
     @isPositiveNumber
@@ -283,46 +328,46 @@ public class DaemonConfig implements Validated {
     public static final String LOGVIEWER_CHILDOPTS = "logviewer.childopts";
 
     /**
-     * How often to clean up old log files
+     * How often to clean up old log files.
      */
     @isInteger
     @isPositiveNumber
     public static final String LOGVIEWER_CLEANUP_INTERVAL_SECS = "logviewer.cleanup.interval.secs";
 
     /**
-     * How many minutes since a log was last modified for the log to be considered for clean-up
+     * How many minutes since a log was last modified for the log to be considered for clean-up.
      */
     @isInteger
     @isPositiveNumber
     public static final String LOGVIEWER_CLEANUP_AGE_MINS = "logviewer.cleanup.age.mins";
 
     /**
-     * The maximum number of bytes all worker log files can take up in MB
+     * The maximum number of bytes all worker log files can take up in MB.
      */
     @isPositiveNumber
     public static final String LOGVIEWER_MAX_SUM_WORKER_LOGS_SIZE_MB = "logviewer.max.sum.worker.logs.size.mb";
 
     /**
-     * The maximum number of bytes per worker's files can take up in MB
+     * The maximum number of bytes per worker's files can take up in MB.
      */
     @isPositiveNumber
     public static final String LOGVIEWER_MAX_PER_WORKER_LOGS_SIZE_MB = "logviewer.max.per.worker.logs.size.mb";
 
     /**
-     * Storm Logviewer HTTPS port
+     * Storm Logviewer HTTPS port. Logviewer must use HTTPS if Storm UI is using HTTPS.
      */
     @isInteger
     @isPositiveNumber
     public static final String LOGVIEWER_HTTPS_PORT = "logviewer.https.port";
 
     /**
-     * Path to the keystore containing the certs used by Storm Logviewer for HTTPS communications
+     * Path to the keystore containing the certs used by Storm Logviewer for HTTPS communications.
      */
     @isString
     public static final String LOGVIEWER_HTTPS_KEYSTORE_PATH = "logviewer.https.keystore.path";
 
     /**
-     * Password for the keystore for HTTPS for Storm Logviewer
+     * Password for the keystore for HTTPS for Storm Logviewer.
      */
     @isString
     public static final String LOGVIEWER_HTTPS_KEYSTORE_PASSWORD = "logviewer.https.keystore.password";
@@ -341,13 +386,13 @@ public class DaemonConfig implements Validated {
     public static final String LOGVIEWER_HTTPS_KEY_PASSWORD = "logviewer.https.key.password";
 
     /**
-     * Path to the truststore containing the certs used by Storm Logviewer for HTTPS communications
+     * Path to the truststore containing the certs used by Storm Logviewer for HTTPS communications.
      */
     @isString
     public static final String LOGVIEWER_HTTPS_TRUSTSTORE_PATH = "logviewer.https.truststore.path";
 
     /**
-     * Password for the truststore for HTTPS for Storm Logviewer
+     * Password for the truststore for HTTPS for Storm Logviewer.
      */
     @isString
     public static final String LOGVIEWER_HTTPS_TRUSTSTORE_PASSWORD = "logviewer.https.truststore.password";
@@ -369,13 +414,13 @@ public class DaemonConfig implements Validated {
     public static final String LOGVIEWER_HTTPS_NEED_CLIENT_AUTH = "logviewer.https.need.client.auth";
 
     /**
-     * A list of users allowed to view logs via the Log Viewer
+     * A list of users allowed to view logs via the Log Viewer.
      */
     @isStringList
     public static final String LOGS_USERS = "logs.users";
 
     /**
-     * A list of groups allowed to view logs via the Log Viewer
+     * A list of groups allowed to view logs via the Log Viewer.
      */
     @isStringList
     public static final String LOGS_GROUPS = "logs.groups";
@@ -393,26 +438,26 @@ public class DaemonConfig implements Validated {
     public static final String UI_CHILDOPTS = "ui.childopts";
 
     /**
-     * A class implementing javax.servlet.Filter for authenticating/filtering UI requests
+     * A class implementing javax.servlet.Filter for authenticating/filtering UI requests.
      */
     @isString
     public static final String UI_FILTER = "ui.filter";
 
     /**
-     * Initialization parameters for the javax.servlet.Filter
+     * Initialization parameters for the javax.servlet.Filter.
      */
     @isMapEntryType(keyType = String.class, valueType = String.class)
     public static final String UI_FILTER_PARAMS = "ui.filter.params";
 
     /**
-     * The size of the header buffer for the UI in bytes
+     * The size of the header buffer for the UI in bytes.
      */
     @isInteger
     @isPositiveNumber
     public static final String UI_HEADER_BUFFER_BYTES = "ui.header.buffer.bytes";
 
     /**
-     * This port is used by Storm DRPC for receiving HTTPS (SSL) DPRC requests from clients.
+     * This port is used by Storm UI for receiving HTTPS (SSL) requests from clients.
      */
     @isInteger
     @isPositiveNumber
@@ -554,7 +599,7 @@ public class DaemonConfig implements Validated {
     public static final String DRPC_HTTPS_NEED_CLIENT_AUTH = "drpc.https.need.client.auth";
 
     /**
-     * Class name for authorization plugin for DRPC client
+     * Class name for authorization plugin for DRPC client.
      */
     @isString
     public static final String DRPC_AUTHORIZER = "drpc.authorizer";
@@ -577,7 +622,7 @@ public class DaemonConfig implements Validated {
     public static final String DRPC_CHILDOPTS = "drpc.childopts";
 
     /**
-     * the metadata configured on the supervisor
+     * the metadata configured on the supervisor.
      */
     @isMapEntryType(keyType = String.class, valueType = String.class)
     public static final String SUPERVISOR_SCHEDULER_META = "supervisor.scheduler.meta";
@@ -589,7 +634,7 @@ public class DaemonConfig implements Validated {
      */
     @isNoDuplicateInList
     @NotNull
-    @isListEntryCustom(entryValidatorClasses={ConfigValidation.IntegerValidator.class,ConfigValidation.PositiveNumberValidator.class})
+    @isListEntryCustom(entryValidatorClasses = {ConfigValidation.IntegerValidator.class,ConfigValidation.PositiveNumberValidator.class})
     public static final String SUPERVISOR_SLOTS_PORTS = "supervisor.slots.ports";
 
     /**
@@ -651,14 +696,14 @@ public class DaemonConfig implements Validated {
     public static final String NIMBUS_SLOTS_PER_TOPOLOGY = "nimbus.slots.perTopology";
 
     /**
-     * A class implementing javax.servlet.Filter for DRPC HTTP requests
+     * A class implementing javax.servlet.Filter for DRPC HTTP requests.
      */
     @isString
     public static final String DRPC_HTTP_FILTER = "drpc.http.filter";
 
     /**
      * Initialization parameters for the javax.servlet.Filter of the DRPC HTTP
-     * service
+     * service.
      */
     @isMapEntryType(keyType = String.class, valueType = String.class)
     public static final String DRPC_HTTP_FILTER_PARAMS = "drpc.http.filter.params";
@@ -678,7 +723,7 @@ public class DaemonConfig implements Validated {
     public static final String SUPERVISOR_CHILDOPTS = "supervisor.childopts";
 
     /**
-     * How many seconds to sleep for before shutting down threads on worker
+     * How many seconds to sleep for before shutting down threads on worker.
      */
     @isInteger
     @isPositiveNumber
@@ -738,7 +783,7 @@ public class DaemonConfig implements Validated {
     /**
      * The command launched supervisor with worker arguments
      * pid, action and [target_directory]
-     * Where action is - start profile, stop profile, jstack, heapdump and kill against pid
+     * Where action is - start profile, stop profile, jstack, heapdump and kill against pid.
      *
      */
     @isString
@@ -761,10 +806,10 @@ public class DaemonConfig implements Validated {
     public static final String STORM_CLUSTER_METRICS_CONSUMER_PUBLISH_INTERVAL_SECS = "storm.cluster.metrics.consumer.publish.interval.secs";
 
     /**
-     * Enables user-first classpath. See topology.classpath.beginning
+     * Enables user-first classpath. See topology.classpath.beginning.
      */
     @isBoolean
-    public static final String STORM_TOPOLOGY_CLASSPATH_BEGINNING_ENABLED="storm.topology.classpath.beginning.enabled";
+    public static final String STORM_TOPOLOGY_CLASSPATH_BEGINNING_ENABLED = "storm.topology.classpath.beginning.enabled";
 
     /**
      * This value is passed to spawned JVMs (e.g., Nimbus, Supervisor, and Workers)
@@ -791,6 +836,38 @@ public class DaemonConfig implements Validated {
     public static final String ISOLATION_SCHEDULER_MACHINES = "isolation.scheduler.machines";
 
     /**
+     * For ArtifactoryConfigLoader, this can either be a reference to an individual file in Artifactory or to a directory.
+     * If it is a directory, the file with the largest lexographic name will be returned. Users need to add "artifactory+" to the beginning of
+     * the real URI to use ArtifactoryConfigLoader.
+     * For FileConfigLoader, this is the URI pointing to a file.
+     */
+    @isString
+    public static final String SCHEDULER_CONFIG_LOADER_URI = "scheduler.config.loader.uri";
+
+    /**
+     * It is the frequency at which the plugin will call out to artifactory instead of returning the most recently cached result.
+     * Currently it's only used in ArtifactoryConfigLoader.
+     */
+    @isInteger
+    @isPositiveNumber
+    public static final String SCHEDULER_CONFIG_LOADER_POLLTIME_SECS = "scheduler.config.loader.polltime.secs";
+
+    /**
+     * It is the amount of time an http connection to the artifactory server will wait before timing out.
+     * Currently it's only used in ArtifactoryConfigLoader.
+     */
+    @isInteger
+    @isPositiveNumber
+    public static final String SCHEDULER_CONFIG_LOADER_TIMEOUT_SECS = "scheduler.config.loader.timeout.secs";
+
+    /**
+     * It is the part of the uri, configurable in Artifactory, which represents the top of the directory tree.
+     * It's only used in ArtifactoryConfigLoader.
+     */
+    @isString
+    public static final String  SCHEDULER_CONFIG_LOADER_ARTIFACTORY_BASE_DIRECTORY = "scheduler.config.loader.artifactory.base.directory";
+
+    /**
      * A map from the user name to the number of machines that should that user is allowed to use. Set storm.scheduler
      * to org.apache.storm.scheduler.multitenant.MultitenantScheduler
      */
@@ -801,22 +878,25 @@ public class DaemonConfig implements Validated {
      * A map of users to another map of the resource guarantees of the user. Used by Resource Aware Scheduler to ensure
      * per user resource guarantees.
      */
-    @isMapEntryCustom(keyValidatorClasses = {ConfigValidation.StringValidator.class}, valueValidatorClasses = {ConfigValidation.UserResourcePoolEntryValidator.class})
+    @isMapEntryCustom(
+            keyValidatorClasses = {ConfigValidation.StringValidator.class},
+            valueValidatorClasses = {ConfigValidation.UserResourcePoolEntryValidator.class})
     public static final String RESOURCE_AWARE_SCHEDULER_USER_POOLS = "resource.aware.scheduler.user.pools";
 
     /**
-     * The class that specifies the eviction strategy to use in ResourceAwareScheduler
-     */
-    @NotNull
-    @isImplementationOfClass(implementsClass = IEvictionStrategy.class)
-    public static final String RESOURCE_AWARE_SCHEDULER_EVICTION_STRATEGY = "resource.aware.scheduler.eviction.strategy";
-
-    /**
-     * the class that specifies the scheduling priority strategy to use in ResourceAwareScheduler
+     * the class that specifies the scheduling priority strategy to use in ResourceAwareScheduler.
      */
     @NotNull
     @isImplementationOfClass(implementsClass = ISchedulingPriorityStrategy.class)
     public static final String RESOURCE_AWARE_SCHEDULER_PRIORITY_STRATEGY = "resource.aware.scheduler.priority.strategy";
+
+    /**
+     * The maximum number of times that the RAS will attempt to schedule a topology. The default is 5.
+     */
+    @isInteger
+    @isPositiveNumber
+    public static final String RESOURCE_AWARE_SCHEDULER_MAX_TOPOLOGY_SCHEDULING_ATTEMPTS =
+        "resource.aware.scheduler.max.topology.scheduling.attempts";
 
     /**
      * How often nimbus's background thread to sync code for missing topologies should run.
@@ -825,33 +905,23 @@ public class DaemonConfig implements Validated {
     public static final String NIMBUS_CODE_SYNC_FREQ_SECS = "nimbus.code.sync.freq.secs";
 
     /**
-     * An implementation of @{link org.apache.storm.daemon.JarTransformer} that will can be used to transform a jar
-     * file before storm jar runs with it. Use with extreme caution.
-     * If you want to enable a transition between org.apache.storm and org.apache.storm to run older topologies
-     * you can set this to org.apache.storm.hack.StormShadeTransformer.  But this is likely to be deprecated in
-     * future releases.
-     */
-    @isString
-    public static final String CLIENT_JAR_TRANSFORMER = "client.jartransformer.class";
-
-    /**
-     * The plugin to be used for resource isolation
+     * The plugin to be used for resource isolation.
      */
     @isImplementationOfClass(implementsClass = ResourceIsolationInterface.class)
     public static final String STORM_RESOURCE_ISOLATION_PLUGIN = "storm.resource.isolation.plugin";
 
     /**
-     * CGroup Setting below
+     * CGroup Setting below.
      */
 
     /**
-     * resources to to be controlled by cgroups
+     * resources to to be controlled by cgroups.
      */
     @isStringList
     public static final String STORM_CGROUP_RESOURCES = "storm.cgroup.resources";
 
     /**
-     * name for the cgroup hierarchy
+     * name for the cgroup hierarchy.
      */
     @isString
     public static final String STORM_CGROUP_HIERARCHY_NAME = "storm.cgroup.hierarchy.name";
@@ -865,34 +935,169 @@ public class DaemonConfig implements Validated {
     public static final String STORM_RESOURCE_ISOLATION_PLUGIN_ENABLE = "storm.resource.isolation.plugin.enable";
 
     /**
-     * root directory for cgoups
+     * root directory for cgoups.
      */
     @isString
     public static String STORM_SUPERVISOR_CGROUP_ROOTDIR = "storm.supervisor.cgroup.rootdir";
 
     /**
-     * the manually set memory limit (in MB) for each CGroup on supervisor node
+     * the manually set memory limit (in MB) for each CGroup on supervisor node.
      */
     @isPositiveNumber
     public static String STORM_WORKER_CGROUP_MEMORY_MB_LIMIT = "storm.worker.cgroup.memory.mb.limit";
 
     /**
-     * the manually set cpu share for each CGroup on supervisor node
+     * the manually set cpu share for each CGroup on supervisor node.
      */
     @isPositiveNumber
     public static String STORM_WORKER_CGROUP_CPU_LIMIT = "storm.worker.cgroup.cpu.limit";
 
     /**
-     * full path to cgexec command
+     * full path to cgexec command.
      */
     @isString
     public static String STORM_CGROUP_CGEXEC_CMD = "storm.cgroup.cgexec.cmd";
 
     /**
-     * The amount of memory a worker can exceed its allocation before cgroup will kill it
+     * Please use STORM_SUPERVISOR_MEMORY_LIMIT_TOLERANCE_MARGIN_MB instead. The amount of memory a
+     * worker can exceed its allocation before cgroup will kill it.
+     */
+    @isPositiveNumber(includeZero = true)
+    public static String STORM_CGROUP_MEMORY_LIMIT_TOLERANCE_MARGIN_MB =
+        "storm.cgroup.memory.limit.tolerance.margin.mb";
+
+    /**
+     * Java does not always play nicely with cgroups. It is coming but not fully implemented and not
+     * for the way storm uses cgroups. In the short term you can disable the hard memory enforcement
+     * by cgroups and let the supervisor handle shooting workers going over their limit in a kinder
+     * way.
+     */
+    @isBoolean
+    public static String STORM_CGROUP_MEMORY_ENFORCEMENT_ENABLE = "storm.cgroup.memory.enforcement.enable";
+
+    // Configs for memory enforcement done by the supervisor (not cgroups directly)
+
+    /**
+     * Memory given to each worker for free (because java and storm have some overhead). This is
+     * memory on the box that the workers can use. This should not be included in
+     * SUPERVISOR_MEMORY_CAPACITY_MB, as nimbus does not use this memory for scheduling.
      */
     @isPositiveNumber
-    public static String STORM_CGROUP_MEMORY_LIMIT_TOLERANCE_MARGIN_MB = "storm.cgroup.memory.limit.tolerance.margin.mb";
+    public static String STORM_SUPERVISOR_MEMORY_LIMIT_TOLERANCE_MARGIN_MB =
+        "storm.supervisor.memory.limit.tolerance.margin.mb";
+
+    /**
+     * A multiplier for the memory limit of a worker that will have the supervisor shoot it
+     * immediately. 1.0 means shoot the worker as soon as it goes over. 2.0 means shoot the worker if
+     * its usage is double what was requested. This value is combined with
+     * STORM_SUPERVISOR_HARD_MEMORY_LIMIT_OVERAGE and which ever is greater is used for enforcement.
+     * This allows small workers to not be shot.
+     */
+    @isPositiveNumber
+    public static String STORM_SUPERVISOR_HARD_MEMORY_LIMIT_MULTIPLIER =
+        "storm.supervisor.hard.memory.limit.multiplier";
+
+    /**
+     * If the memory usage of a worker goes over its limit by this value is it shot immediately. This
+     * value is combined with STORM_SUPERVISOR_HARD_LIMIT_MEMORY_MULTIPLIER and which ever is greater
+     * is used for enforcement. This allows small workers to not be shot.
+     */
+    @isPositiveNumber(includeZero = true)
+    public static String STORM_SUPERVISOR_HARD_LIMIT_MEMORY_OVERAGE_MB = "storm.supervisor.hard.memory.limit.overage.mb";
+
+    /**
+     * If the amount of memory that is free in the system (either on the box or in the supervisor's
+     * cgroup) is below this number (in MB) consider the system to be in low memory mode and start
+     * shooting workers if they are over their limit.
+     */
+    @isPositiveNumber
+    public static String STORM_SUPERVISOR_LOW_MEMORY_THRESHOLD_MB = "storm.supervisor.low.memory.threshold.mb";
+
+    /**
+     * If the amount of memory that is free in the system (either on the box or in the supervisor's
+     * cgroup) is below this number (in MB) consider the system to be a little low on memory and start
+     * shooting workers if they are over their limit for a given grace period
+     * STORM_SUPERVISOR_MEDIUM_MEMORY_GRACE_PERIOD_MS.
+     */
+    @isPositiveNumber
+    public static String STORM_SUPERVISOR_MEDIUM_MEMORY_THRESHOLD_MB = "storm.supervisor.medium.memory.threshold.mb";
+
+    /**
+     * The number of milliseconds that a worker is allowed to be over their limit when there is a
+     * medium amount of memory free in the system.
+     */
+    @isPositiveNumber
+    public static String STORM_SUPERVISOR_MEDIUM_MEMORY_GRACE_PERIOD_MS =
+        "storm.supervisor.medium.memory.grace.period.ms";
+
+    /**
+     * Class implementing MetricStore.  Runs on Nimbus.
+     */
+    @NotNull
+    @isString
+    // Validating class implementation could fail on non-Nimbus Daemons.  Nimbus will catch the class not found on startup
+    // and log an error message, so just validating this as a String for now.
+    public static final String STORM_METRIC_STORE_CLASS = "storm.metricstore.class";
+
+    /**
+     * Class implementing WorkerMetricsProcessor.  Runs on Supervisors.
+     */
+    @NotNull
+    @isString
+    public static final String STORM_METRIC_PROCESSOR_CLASS = "storm.metricprocessor.class";
+
+    /**
+     * RocksDB file location. This setting is specific to the org.apache.storm.metricstore.rocksdb.RocksDbStore
+     * implementation for the storm.metricstore.class.
+     */
+    @isString
+    public static final String STORM_ROCKSDB_LOCATION = "storm.metricstore.rocksdb.location";
+
+    /**
+     * RocksDB create if missing flag. This setting is specific to the org.apache.storm.metricstore.rocksdb.RocksDbStore
+     * implementation for the storm.metricstore.class.
+     */
+    @isBoolean
+    public static final String STORM_ROCKSDB_CREATE_IF_MISSING = "storm.metricstore.rocksdb.create_if_missing";
+
+    /**
+     * RocksDB metadata cache capacity. This setting is specific to the org.apache.storm.metricstore.rocksdb.RocksDbStore
+     * implementation for the storm.metricstore.class.
+     */
+    @isInteger
+    public static final String STORM_ROCKSDB_METADATA_STRING_CACHE_CAPACITY = "storm.metricstore.rocksdb.metadata_string_cache_capacity";
+
+    /**
+     * RocksDB setting for length of metric retention. This setting is specific to the org.apache.storm.metricstore.rocksdb.RocksDbStore
+     * implementation for the storm.metricstore.class.
+     */
+    @isInteger
+    public static final String STORM_ROCKSDB_METRIC_RETENTION_HOURS = "storm.metricstore.rocksdb.retention_hours";
+
+    /**
+     * RocksDB setting for period of metric deletion thread. This setting is specific to the
+     * org.apache.storm.metricstore.rocksdb.RocksDbStore implementation for the storm.metricstore.class.
+     */
+    @isInteger
+    public static final String STORM_ROCKSDB_METRIC_DELETION_PERIOD_HOURS = "storm.metricstore.rocksdb.deletion_period_hours";
+
+    /**
+     * The number of hours a worker token is valid for.  This also sets how frequently worker tokens will be renewed.
+     */
+    @isPositiveNumber
+    public static String STORM_WORKER_TOKEN_LIFE_TIME_HOURS = "storm.worker.token.life.time.hours";
+
+    // VALIDATION ONLY CONFIGS
+    // Some configs inside Config.java may reference classes we don't want to expose in storm-client, but we still want to validate
+    // That they reference a valid class.  To allow this to happen we do part of the validation on the client side with annotations on
+    // static final members of the Config class, and other validations here.  We avoid naming them the same thing because clojure code
+    // walks these two classes and creates clojure constants for these values.
+
+    /**
+     * Server side validation that @{see Config#TOPOLOGY_SCHEDULER_STRATEGY} is set ot a subclass of IStrategy.
+     */
+    @isImplementationOfClass(implementsClass = IStrategy.class)
+    public static final String VALIDATE_TOPOLOGY_SCHEDULER_STRATEGY = Config.TOPOLOGY_SCHEDULER_STRATEGY;
 
     public static String getCgroupRootDir(Map<String, Object> conf) {
         return (String) conf.get(STORM_SUPERVISOR_CGROUP_ROOTDIR);
@@ -902,8 +1107,14 @@ public class DaemonConfig implements Validated {
         return (String) conf.get(Config.STORM_CGROUP_HIERARCHY_DIR);
     }
 
+    /**
+     * Get the cgroup resources from the conf.
+     *
+     * @param conf the config to read
+     * @return the resources.
+     */
     public static ArrayList<String> getCgroupStormResources(Map<String, Object> conf) {
-        ArrayList<String> ret = new ArrayList<String>();
+        ArrayList<String> ret = new ArrayList<>();
         for (String entry : ((Iterable<String>) conf.get(DaemonConfig.STORM_CGROUP_RESOURCES))) {
             ret.add(entry);
         }
@@ -913,5 +1124,4 @@ public class DaemonConfig implements Validated {
     public static String getCgroupStormHierarchyName(Map<String, Object> conf) {
         return (String) conf.get(DaemonConfig.STORM_CGROUP_HIERARCHY_NAME);
     }
-
 }

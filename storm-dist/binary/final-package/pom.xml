@@ -36,11 +36,6 @@
             <artifactId>storm-core</artifactId>
             <version>${project.version}</version>
         </dependency>
-        <dependency>
-            <groupId>org.apache.storm</groupId>
-            <artifactId>storm-rename-hack</artifactId>
-            <version>${project.version}</version>
-        </dependency>
     </dependencies>
 
     <build>
@@ -59,6 +54,7 @@
                 </executions>
                 <configuration>
                     <attach>true</attach>
+                    <tarLongFileMode>posix</tarLongFileMode>
                     <runOnlyAtExecutionRoot>false</runOnlyAtExecutionRoot>
                     <descriptors>
                         <descriptor>${project.basedir}/src/main/assembly/binary.xml</descriptor>

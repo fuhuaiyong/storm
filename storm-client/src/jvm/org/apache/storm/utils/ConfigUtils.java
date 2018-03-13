@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,24 +18,26 @@
 
 package org.apache.storm.utils;
 
-import org.apache.commons.io.FileUtils;
-import org.apache.storm.Config;
-import org.apache.storm.daemon.supervisor.AdvancedFSOps;
-import org.apache.storm.generated.StormTopology;
-import org.apache.storm.validation.ConfigValidation;
-
 import java.io.File;
 import java.io.IOException;
 import java.net.URLEncoder;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.HashSet;
 import java.util.concurrent.Callable;
 import java.util.stream.Collectors;
+import java.util.function.BooleanSupplier;
+
+import org.apache.commons.io.FileUtils;
+import org.apache.storm.Config;
+import org.apache.storm.daemon.supervisor.AdvancedFSOps;
+import org.apache.storm.generated.StormTopology;
+import org.apache.storm.validation.ConfigValidation;
+
 
 public class ConfigUtils {
     public static final String FILE_SEPARATOR = File.separator;
@@ -79,7 +81,7 @@ public class ConfigUtils {
      */
     public static Collection<String> readDirContents(String dir) {
         Collection<File> ret = readDirFiles(dir);
-        return ret.stream().map( car -> car.getName() ).collect( Collectors.toList() );
+        return ret.stream().map(car -> car.getName()).collect(Collectors.toList());
     }
 
     /**
@@ -143,19 +145,19 @@ public class ConfigUtils {
         throw new IllegalArgumentException("Illegal topology.stats.sample.rate in conf: " + rate);
     }
 
-    public static Callable<Boolean> mkStatsSampler(Map<String, Object> conf) {
+    public static BooleanSupplier mkStatsSampler(Map<String, Object> conf) {
         return evenSampler(samplingRate(conf));
     }
 
-    public static Callable<Boolean> evenSampler(final int samplingFreq) {
+    public static BooleanSupplier evenSampler(final int samplingFreq) {
         final Random random = new Random();
 
-        return new Callable<Boolean>() {
+        return new BooleanSupplier() {
             private int curr = -1;
             private int target = random.nextInt(samplingFreq);
 
             @Override
-            public Boolean call() throws Exception {
+            public boolean getAsBoolean() {
                 curr++;
                 if (curr >= samplingFreq) {
                     curr = 0;
@@ -215,6 +217,20 @@ public class ConfigUtils {
         }
     }
 
+    public static String absoluteStormBlobStoreDir(Map<String, Object> conf) {
+        String blobStoreDir = (String) conf.get(Config.BLOBSTORE_DIR);
+        if (blobStoreDir == null) {
+            return ConfigUtils.absoluteStormLocalDir(conf);
+        } else {
+            if (new File(blobStoreDir).isAbsolute()) {
+                return blobStoreDir;
+            } else {
+                String stormHome = System.getProperty("storm.home");
+                return (stormHome + FILE_SEPARATOR + blobStoreDir);
+            }
+        }
+    }
+
     public static StormTopology readSupervisorStormCodeGivenPath(String stormCodePath, AdvancedFSOps ops) throws IOException {
         return Utils.deserialize(ops.slurp(new File(stormCodePath)), StormTopology.class);
     }
@@ -258,7 +274,7 @@ public class ConfigUtils {
     public static Map overrideLoginConfigWithSystemProperty(Map<String, Object> conf) { // note that we delete the return value
         String loginConfFile = System.getProperty("java.security.auth.login.config");
         if (loginConfFile != null) {
-             conf.put("java.security.auth.login.config", loginConfFile);
+            conf.put("java.security.auth.login.config", loginConfFile);
         }
         return conf;
     }
@@ -419,5 +435,4 @@ public class ConfigUtils {
         FileUtils.forceMkdir(new File(ret));
         return ret;
     }
-
 }

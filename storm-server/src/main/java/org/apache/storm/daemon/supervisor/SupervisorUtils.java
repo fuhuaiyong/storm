@@ -20,7 +20,6 @@ package org.apache.storm.daemon.supervisor;
 import org.apache.storm.Config;
 import org.apache.storm.generated.LSWorkerHeartbeat;
 import org.apache.storm.localizer.LocalResource;
-import org.apache.storm.localizer.Localizer;
 import org.apache.storm.utils.ConfigUtils;
 import org.apache.storm.utils.ServerUtils;
 import org.apache.storm.utils.Utils;
@@ -32,14 +31,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.net.URLDecoder;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class SupervisorUtils {
 
@@ -73,8 +69,19 @@ public class SupervisorUtils {
      * @param blobInfo
      * @return
      */
-    public static Boolean shouldUncompressBlob(Map<String, Object> blobInfo) {
+    public static boolean shouldUncompressBlob(Map<String, Object> blobInfo) {
         return ObjectReader.getBoolean(blobInfo.get("uncompress"), false);
+    }
+
+    /**
+     * Given the blob information returns the value of the workerRestart field, handling it either being a string or a boolean value, or
+     * if it's not specified then returns false
+     *
+     * @param blobInfo the info for the blob.
+     * @return true if the blob needs a worker restart by way of the callback else false.
+     */
+    public static boolean blobNeedsWorkerRestart(Map<String, Object> blobInfo) {
+        return ObjectReader.getBoolean(blobInfo.get("workerRestart"), false);
     }
 
     /**
@@ -87,39 +94,12 @@ public class SupervisorUtils {
         List<LocalResource> localResourceList = new ArrayList<>();
         if (blobstoreMap != null) {
             for (Map.Entry<String, Map<String, Object>> map : blobstoreMap.entrySet()) {
-                LocalResource localResource = new LocalResource(map.getKey(), shouldUncompressBlob(map.getValue()));
+                Map<String, Object> blobConf = map.getValue();
+                LocalResource localResource = new LocalResource(map.getKey(), shouldUncompressBlob(blobConf), blobNeedsWorkerRestart(blobConf));
                 localResourceList.add(localResource);
             }
         }
         return localResourceList;
-    }
-
-    /**
-     * For each of the downloaded topologies, adds references to the blobs that the topologies are using. This is used to reconstruct the cache on restart.
-     * 
-     * @param localizer
-     * @param stormId
-     * @param conf
-     */
-    static void addBlobReferences(Localizer localizer, String stormId, Map<String, Object> conf) throws IOException {
-        Map<String, Object> topoConf = ConfigUtils.readSupervisorStormConf(conf, stormId);
-        Map<String, Map<String, Object>> blobstoreMap = (Map<String, Map<String, Object>>) topoConf.get(Config.TOPOLOGY_BLOBSTORE_MAP);
-        String user = (String) topoConf.get(Config.TOPOLOGY_SUBMITTER_USER);
-        String topoName = (String) topoConf.get(Config.TOPOLOGY_NAME);
-        List<LocalResource> localresources = SupervisorUtils.blobstoreMapToLocalresources(blobstoreMap);
-        if (blobstoreMap != null) {
-            localizer.addReferences(localresources, user, topoName);
-        }
-    }
-
-    public static Set<String> readDownloadedTopologyIds(Map<String, Object> conf) throws IOException {
-        Set<String> stormIds = new HashSet<>();
-        String path = ConfigUtils.supervisorStormDistRoot(conf);
-        Collection<String> rets = ConfigUtils.readDirContents(path);
-        for (String ret : rets) {
-            stormIds.add(URLDecoder.decode(ret));
-        }
-        return stormIds;
     }
 
     public static Collection<String> supervisorWorkerIds(Map<String, Object> conf) {
@@ -180,12 +160,5 @@ public class SupervisorUtils {
 
     private  boolean  isWorkerHbTimedOutImpl(int now, LSWorkerHeartbeat whb, Map<String, Object> conf) {
         return (now - whb.get_time_secs()) > ObjectReader.getInt(conf.get(Config.SUPERVISOR_WORKER_TIMEOUT_SECS));
-    }
-
-    static List<ACL> supervisorZkAcls() {
-        final List<ACL> acls = new ArrayList<>();
-        acls.add(ZooDefs.Ids.CREATOR_ALL_ACL.get(0));
-        acls.add(new ACL((ZooDefs.Perms.READ ^ ZooDefs.Perms.CREATE), ZooDefs.Ids.ANYONE_ID_UNSAFE));
-        return acls;
     }
 }

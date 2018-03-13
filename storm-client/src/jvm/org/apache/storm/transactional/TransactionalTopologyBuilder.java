@@ -15,9 +15,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.storm.transactional;
 
-import org.apache.storm.coordination.IBatchBolt;
 import org.apache.storm.coordination.BatchBoltExecutor;
 import org.apache.storm.Config;
 import org.apache.storm.Constants;
@@ -26,6 +26,7 @@ import org.apache.storm.coordination.CoordinatedBolt.IdStreamSpec;
 import org.apache.storm.coordination.CoordinatedBolt.SourceArgs;
 import org.apache.storm.generated.GlobalStreamId;
 import org.apache.storm.generated.Grouping;
+import org.apache.storm.generated.SharedMemory;
 import org.apache.storm.generated.StormTopology;
 import org.apache.storm.grouping.CustomStreamGrouping;
 import org.apache.storm.grouping.PartialKeyGrouping;
@@ -33,8 +34,9 @@ import org.apache.storm.topology.BaseConfigurationDeclarer;
 import org.apache.storm.topology.BasicBoltExecutor;
 import org.apache.storm.topology.BoltDeclarer;
 import org.apache.storm.topology.IBasicBolt;
-import org.apache.storm.topology.IRichBolt;
+import org.apache.storm.coordination.IBatchBolt;
 import org.apache.storm.topology.InputDeclarer;
+import org.apache.storm.topology.IRichBolt;
 import org.apache.storm.topology.SpoutDeclarer;
 import org.apache.storm.topology.TopologyBuilder;
 import org.apache.storm.transactional.partitioned.IOpaquePartitionedTransactionalSpout;
@@ -56,20 +58,21 @@ import java.util.Set;
  */
 @Deprecated
 public class TransactionalTopologyBuilder {
-    String _id;
-    String _spoutId;
-    ITransactionalSpout _spout;
-    Map<String, Component> _bolts = new HashMap<String, Component>();
-    Integer _spoutParallelism;
-    List<Map<String, Object>> _spoutConfs = new ArrayList<>();
-    
+    final String id;
+    final String spoutId;
+    final ITransactionalSpout spout;
+    final Map<String, Component> bolts = new HashMap<>();
+    final Integer spoutParallelism;
+    final Map<String, Object> spoutConf = new HashMap<>();
+    final Set<SharedMemory> spoutSharedMemory = new HashSet<>();
+
     // id is used to store the state of this transactionalspout in zookeeper
     // it would be very dangerous to have 2 topologies active with the same id in the same cluster    
     public TransactionalTopologyBuilder(String id, String spoutId, ITransactionalSpout spout, Number spoutParallelism) {
-        _id = id;
-        _spoutId = spoutId;
-        _spout = spout;
-        _spoutParallelism = (spoutParallelism == null) ? null : spoutParallelism.intValue();
+        this.id = id;
+        this.spoutId = spoutId;
+        this.spout = spout;
+        this.spoutParallelism = (spoutParallelism == null) ? null : spoutParallelism.intValue();
     }
     
     public TransactionalTopologyBuilder(String id, String spoutId, ITransactionalSpout spout) {
@@ -124,32 +127,35 @@ public class TransactionalTopologyBuilder {
         Integer p = null;
         if(parallelism!=null) p = parallelism.intValue();
         Component component = new Component(bolt, p, committer);
-        _bolts.put(id, component);
+        bolts.put(id, component);
         return new BoltDeclarerImpl(component);
     }
     
     public TopologyBuilder buildTopologyBuilder() {
-        String coordinator = _spoutId + "/coordinator";
+        String coordinator = spoutId + "/coordinator";
         TopologyBuilder builder = new TopologyBuilder();
-        SpoutDeclarer declarer = builder.setSpout(coordinator, new TransactionalSpoutCoordinator(_spout));
-        for(Map<String, Object> conf: _spoutConfs) {
-            declarer.addConfigurations(conf);
+        SpoutDeclarer declarer = builder.setSpout(coordinator, new TransactionalSpoutCoordinator(spout));
+        for (SharedMemory request: spoutSharedMemory) {
+            declarer.addSharedMemory(request);
         }
-        declarer.addConfiguration(Config.TOPOLOGY_TRANSACTIONAL_ID, _id);
+        if (!spoutConf.isEmpty()) {
+            declarer.addConfigurations(spoutConf);
+        }
+        declarer.addConfiguration(Config.TOPOLOGY_TRANSACTIONAL_ID, id);
 
         BoltDeclarer emitterDeclarer = 
-                builder.setBolt(_spoutId,
-                        new CoordinatedBolt(new TransactionalSpoutBatchExecutor(_spout),
+                builder.setBolt(spoutId,
+                        new CoordinatedBolt(new TransactionalSpoutBatchExecutor(spout),
                                              null,
                                              null),
-                        _spoutParallelism)
+                    spoutParallelism)
                 .allGrouping(coordinator, TransactionalSpoutCoordinator.TRANSACTION_BATCH_STREAM_ID)
-                .addConfiguration(Config.TOPOLOGY_TRANSACTIONAL_ID, _id);
-        if(_spout instanceof ICommitterTransactionalSpout) {
+                .addConfiguration(Config.TOPOLOGY_TRANSACTIONAL_ID, id);
+        if(spout instanceof ICommitterTransactionalSpout) {
             emitterDeclarer.allGrouping(coordinator, TransactionalSpoutCoordinator.TRANSACTION_COMMIT_STREAM_ID);
         }
-        for(String id: _bolts.keySet()) {
-            Component component = _bolts.get(id);
+        for(String id: bolts.keySet()) {
+            Component component = bolts.get(id);
             Map<String, SourceArgs> coordinatedArgs = new HashMap<String, SourceArgs>();
             for(String c: componentBoltSubscriptions(component)) {
                 coordinatedArgs.put(c, SourceArgs.all());
@@ -164,8 +170,11 @@ public class TransactionalTopologyBuilder {
                                                                       coordinatedArgs,
                                                                       idSpec),
                                                   component.parallelism);
-            for(Map<String, Object> conf: component.componentConfs) {
-                input.addConfigurations(conf);
+            for (SharedMemory request: component.sharedMemory) {
+                input.addSharedMemory(request);
+            }
+            if (!component.componentConf.isEmpty()) {
+                input.addConfigurations(component.componentConf);
             }
             for(String c: componentBoltSubscriptions(component)) {
                 input.directGrouping(c, Constants.COORDINATED_STREAM_ID);
@@ -193,12 +202,13 @@ public class TransactionalTopologyBuilder {
     }
 
     private static class Component {
-        public IRichBolt bolt;
-        public Integer parallelism;
-        public List<InputDeclaration> declarations = new ArrayList<InputDeclaration>();
-        public List<Map<String, Object>> componentConfs = new ArrayList<>();
-        public boolean committer;
-        
+        public final IRichBolt bolt;
+        public final Integer parallelism;
+        public final List<InputDeclaration> declarations = new ArrayList<>();
+        public final Map<String, Object> componentConf = new HashMap<>();
+        public final boolean committer;
+        public final Set<SharedMemory> sharedMemory = new HashSet<>();
+
         public Component(IRichBolt bolt, Integer parallelism, boolean committer) {
             this.bolt = bolt;
             this.parallelism = parallelism;
@@ -214,16 +224,34 @@ public class TransactionalTopologyBuilder {
     private class SpoutDeclarerImpl extends BaseConfigurationDeclarer<SpoutDeclarer> implements SpoutDeclarer {
         @Override
         public SpoutDeclarer addConfigurations(Map<String, Object> conf) {
-            _spoutConfs.add(conf);
+            if (conf != null) {
+                spoutConf.putAll(conf);
+            }
             return this;
-        }        
+        }
+
+        /**
+         * return the current component configuration.
+         *
+         * @return the current configuration.
+         */
+        @Override
+        public Map<String, Object> getComponentConfiguration() {
+            return spoutConf;
+        }
+
+        @Override
+        public SpoutDeclarer addSharedMemory(SharedMemory request) {
+            spoutSharedMemory.add(request);
+            return this;
+        }
     }
     
     private static class BoltDeclarerImpl extends BaseConfigurationDeclarer<BoltDeclarer> implements BoltDeclarer {
-        Component _component;
+        Component component;
         
         public BoltDeclarerImpl(Component component) {
-            _component = component;
+            this.component = component;
         }
         
         @Override
@@ -509,12 +537,30 @@ public class TransactionalTopologyBuilder {
         }
         
         private void addDeclaration(InputDeclaration declaration) {
-            _component.declarations.add(declaration);
+            component.declarations.add(declaration);
         }
 
         @Override
         public BoltDeclarer addConfigurations(Map<String, Object> conf) {
-            _component.componentConfs.add(conf);
+            if (conf != null) {
+                getComponentConfiguration().putAll(conf);
+            }
+            return this;
+        }
+
+        /**
+         * return the current component configuration.
+         *
+         * @return the current configuration.
+         */
+        @Override
+        public Map<String, Object> getComponentConfiguration() {
+            return component.componentConf;
+        }
+
+        @Override
+        public BoltDeclarer addSharedMemory(SharedMemory request) {
+            component.sharedMemory.add(request);
             return this;
         }
     }

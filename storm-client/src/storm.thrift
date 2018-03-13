@@ -111,6 +111,13 @@ struct StateSpoutSpec {
   2: required ComponentCommon common;
 }
 
+struct SharedMemory {
+  1: required string name;
+  2: optional double on_heap;
+  3: optional double off_heap_worker;
+  4: optional double off_heap_node;
+}
+
 struct StormTopology {
   //ids must be unique across maps
   // #workers to use is in conf
@@ -122,6 +129,8 @@ struct StormTopology {
   6: optional list<string> dependency_artifacts;
   7: optional string storm_version;
   8: optional string jdk_version;
+  9: optional map<string, set<string>> component_to_shared_memory;
+  10: optional map<string, SharedMemory> shared_memory;
 }
 
 exception AlreadyAliveException {
@@ -157,6 +166,7 @@ struct TopologySummary {
   6: required i32 uptime_secs;
   7: required string status;
   8: optional string storm_version;
+  9: optional string topology_version;
 513: optional string sched_status;
 514: optional string owner;
 515: optional i32 replication_count;
@@ -178,6 +188,8 @@ struct SupervisorSummary {
   7: optional map<string, double> total_resources;
   8: optional double used_mem;
   9: optional double used_cpu;
+  10: optional double fragmented_mem;
+  11: optional double fragmented_cpu;
 }
 
 struct NimbusSummary {
@@ -357,12 +369,21 @@ struct TopologyPageInfo {
 15: optional i32 replication_count;
 16: optional list<WorkerSummary> workers;
 17: optional string storm_version;
+18: optional string topology_version;
 521: optional double requested_memonheap;
 522: optional double requested_memoffheap;
 523: optional double requested_cpu;
 524: optional double assigned_memonheap;
 525: optional double assigned_memoffheap;
 526: optional double assigned_cpu;
+527: optional double requested_regular_on_heap_memory;
+528: optional double requested_shared_on_heap_memory;
+529: optional double requested_regular_off_heap_memory;
+530: optional double requested_shared_off_heap_memory;
+531: optional double assigned_regular_on_heap_memory;
+532: optional double assigned_shared_on_heap_memory;
+533: optional double assigned_regular_off_heap_memory;
+534: optional double assigned_shared_off_heap_memory;
 }
 
 struct ExecutorAggregateStats {
@@ -397,6 +418,10 @@ struct RebalanceOptions {
   1: optional i32 wait_secs;
   2: optional i32 num_workers;
   3: optional map<string, i32> num_executors;
+  4: optional map<string, map<string, double>> topology_resources_overrides;
+  5: optional string topology_conf_overrides;
+  //This value is not intended to be explicitly set by end users and will be ignored if they do
+  6: optional string principal
 }
 
 struct Credentials {
@@ -469,6 +494,10 @@ struct WorkerResources {
     1: optional double mem_on_heap;
     2: optional double mem_off_heap;
     3: optional double cpu;
+    4: optional double shared_mem_on_heap; //This is just for accounting mem_on_heap should be used for enforcement
+    5: optional double shared_mem_off_heap; //This is just for accounting mem_off_heap should be used for enforcement
+    6: optional map<string, double> resources; // Generic resources Map
+    7: optional map<string, double> shared_resources; // Shared Generic resources Map
 }
 struct Assignment {
     1: required string master_code_dir;
@@ -476,6 +505,8 @@ struct Assignment {
     3: optional map<list<i64>, NodeInfo> executor_node_port = {};
     4: optional map<list<i64>, i64> executor_start_time_secs = {};
     5: optional map<NodeInfo, WorkerResources> worker_resources = {};
+    6: optional map<string, double> total_shared_off_heap = {};
+    7: optional string owner;
 }
 
 enum TopologyStatus {
@@ -500,6 +531,8 @@ struct StormBase {
     7: optional TopologyActionOptions topology_action_options;
     8: optional TopologyStatus prev_status;//currently only used during rebalance action.
     9: optional map<string, DebugOptions> component_debug; // topology/component level debug option.
+   10: optional string principal;
+   11: optional string topology_version;
 }
 
 struct ClusterWorkerHeartbeat {
@@ -522,6 +555,9 @@ struct LocalAssignment {
   1: required string topology_id;
   2: required list<ExecutorInfo> executors;
   3: optional WorkerResources resources;
+  //The total amount of memory shared between workers on this node and topology
+  4: optional double total_node_shared;
+  5: optional string owner;
 }
 
 struct LSSupervisorId {
@@ -615,6 +651,47 @@ struct TopologyHistoryInfo {
   1: list<string> topo_ids;
 }
 
+struct OwnerResourceSummary {
+  1: required string owner;
+  2: optional i32 total_topologies;
+  3: optional i32 total_executors;
+  4: optional i32 total_workers;
+  5: optional double memory_usage;
+  6: optional double cpu_usage;
+  7: optional double memory_guarantee;
+  8: optional double cpu_guarantee;
+  9: optional double memory_guarantee_remaining;
+  10: optional double cpu_guarantee_remaining;
+  11: optional i32 isolated_node_guarantee;
+  12: optional i32 total_tasks;
+  13: optional double requested_on_heap_memory;
+  14: optional double requested_off_heap_memory;
+  15: optional double requested_total_memory;
+  16: optional double requested_cpu;
+  17: optional double assigned_on_heap_memory;
+  18: optional double assigned_off_heap_memory;
+}
+
+struct WorkerMetricPoint {
+  1: required string metricName;
+  2: required i64 timestamp;
+  3: required double metricValue;
+  4: required string componentId;
+  5: required string executorId;
+  6: required string streamId;
+}
+
+struct WorkerMetricList {
+  1: list<WorkerMetricPoint> metrics;
+}
+
+struct WorkerMetrics {
+  1: required string topologyId;
+  2: required i32 port;
+  3: required string hostname;
+  4: required WorkerMetricList metricList;
+}
+
 service Nimbus {
   void submitTopology(1: string name, 2: string uploadedJarLocation, 3: string jsonConf, 4: StormTopology topology) throws (1: AlreadyAliveException e, 2: InvalidTopologyException ite, 3: AuthorizationException aze);
   void submitTopologyWithOpts(1: string name, 2: string uploadedJarLocation, 3: string jsonConf, 4: StormTopology topology, 5: SubmitOptions options) throws (1: AlreadyAliveException e, 2: InvalidTopologyException ite, 3: AuthorizationException aze);
@@ -690,6 +767,8 @@ service Nimbus {
    */
   StormTopology getUserTopology(1: string id) throws (1: NotAliveException e, 2: AuthorizationException aze);
   TopologyHistoryInfo getTopologyHistory(1: string user) throws (1: AuthorizationException aze);
+  list<OwnerResourceSummary> getOwnerResourceSummaries (1: string owner) throws (1: AuthorizationException aze);
+  void processWorkerMetrics(1: WorkerMetrics metrics);
 }
 
 struct DRPCRequest {
@@ -777,4 +856,45 @@ exception HBAuthorizationException {
 
 exception HBExecutionException {
   1: required string msg;
+}
+
+# WorkerTokens are used as credentials that allow a Worker to authenticate with DRPC, Nimbus, or other storm processes that we add in here.
+enum WorkerTokenServiceType {
+    NIMBUS,
+    DRPC
+}
+
+#This is information that we want to be sure users do not modify in any way...
+struct WorkerTokenInfo {
+    # The user/owner of the topology.  So we can authorize based off of a user
+    1: required string userName;
+    # The topology id that this token is a part of.  So we can find the right sceret key, and so we can
+    #  authorize based off of a topology if needed.
+    2: required string topologyId;
+    # What version of the secret key to use.  If it is too old or we cannot find it, then the token will not be valid.
+    3: required i64 secretVersion;
+    # Unix time stamp in millis when this expires
+    4: required i64 expirationTimeMillis;
+}
+
+#This is what we give to worker so they can authenticate with built in daemons
+struct WorkerToken {
+    # What service is this for?
+    1: required WorkerTokenServiceType serviceType;
+    # A serialized version of a WorkerTokenInfo.  We double encode it so the bits don't change between a serialzie/deserialize cycle.
+    2: required binary info;
+    # how to prove that info is correct and unmodified when it gets back to us.
+    3: required binary signature;
+}
+
+#This is the private information that we can use to verify a WorkerToken is still valid
+# The topology id and version number are stored outside of this as the key to look it up.
+struct PrivateWorkerKey {
+    #This is the key itself.  An algorithm selection may be added in the future, but for now there is only
+    # one so don't worry about it.
+    1: required binary key;
+    # Extra sanity check that the user is correct.
+    2: required string userName;
+    # Unix time stamp in millis when this, and any corresponding tokens, expire
+    3: required i64 expirationTimeMillis;
 }

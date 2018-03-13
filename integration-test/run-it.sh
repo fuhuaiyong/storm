@@ -55,7 +55,7 @@ else
         ( cd "${STORM_SRC_DIR}/storm-dist/binary" && mvn clean package -Dgpg.skip=true )
     fi
     (( $(find "${STORM_SRC_DIR}/storm-dist/binary" -iname 'apache-storm*.zip' | wc -l) == 1 )) || die "expected exactly one zip file, did you run: cd ${STORM_SRC_DIR}/storm-dist/binary && mvn clean package -Dgpg.skip=true"
-    zookeeper_version=3.3.5*
+    zookeeper_version=3.4.5*
 fi
 
 storm_binary_zip=$(find "${STORM_SRC_DIR}/storm-dist" -iname '*.zip')
@@ -86,4 +86,4 @@ for i in {1..20} ; do
     sleep 6
 done
 list_storm_processes
-mvn test -DfailIfNoTests=false -Dstorm.version=${STORM_VERSION} -Dui.url=http://localhost:8744
+mvn test -DfailIfNoTests=false -DskipTests=false -Dstorm.version=${STORM_VERSION} -Dui.url=http://localhost:8744

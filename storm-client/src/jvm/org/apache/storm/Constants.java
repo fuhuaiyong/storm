@@ -15,12 +15,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.storm;
 
-import org.apache.storm.coordination.CoordinatedBolt;
-
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import org.apache.storm.coordination.CoordinatedBolt;
 
 
 public class Constants {
@@ -30,7 +33,8 @@ public class Constants {
     public static final List<Long> SYSTEM_EXECUTOR_ID = Arrays.asList(-1L, -1L);
     public static final String SYSTEM_COMPONENT_ID = "__system";
     public static final String SYSTEM_TICK_STREAM_ID = "__tick";
-    public static final String METRICS_COMPONENT_ID_PREFIX = "__metrics";
+    public static final String SYSTEM_FLUSH_STREAM_ID = "__flush";
+    public static final String METRICS_COMPONENT_ID_PREFIX = "__metrics_";
     public static final String METRICS_STREAM_ID = "__metrics";
     public static final String METRICS_TICK_STREAM_ID = "__metrics_tick";
     public static final String CREDENTIALS_CHANGED_STREAM_ID = "__credentials";
@@ -51,10 +55,14 @@ public class Constants {
     public static final String USER_TIMER = "user-timer";
     public static final String TRANSFER_FN = "transfer-fn";
     public static final String SUICIDE_FN = "suicide-fn";
-    public static final String THROTTLE_ON = "throttle-on";
     public static final String EXECUTOR_RECEIVE_QUEUE_MAP = "executor-receive-queue-map";
     public static final String STORM_ACTIVE_ATOM = "storm-active-atom";
     public static final String COMPONENT_TO_DEBUG_ATOM = "storm-component->debug-atom";
     public static final Object LOAD_MAPPING = "load-mapping";
+
+    public static final String COMMON_CPU_RESOURCE_NAME = "cpu.pcore.percent";
+    public static final String COMMON_ONHEAP_MEMORY_RESOURCE_NAME = "onheap.memory.mb";
+    public static final String COMMON_OFFHEAP_MEMORY_RESOURCE_NAME = "offheap.memory.mb";
+    public static final String COMMON_TOTAL_MEMORY_RESOURCE_NAME = "memory.mb";
 }
     

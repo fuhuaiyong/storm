@@ -67,7 +67,7 @@ public class RotatingMap<K, V> {
 
     public RotatingMap(int numBuckets) {
         this(numBuckets, null);
-    }   
+    }
     
     public Map<K, V> rotate() {
         Map<K, V> dead = _buckets.removeLast();
@@ -109,7 +109,7 @@ public class RotatingMap<K, V> {
     }
     
     
-    public Object remove(K key) {
+    public V remove(K key) {
         for(HashMap<K, V> bucket: _buckets) {
             if(bucket.containsKey(key)) {
                 return bucket.remove(key);

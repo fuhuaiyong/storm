@@ -1,4 +1,4 @@
-/*
+/**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Set;
 import java.util.TreeMap;
 
@@ -52,10 +53,8 @@ import org.apache.storm.task.IBolt;
 import org.apache.storm.task.WorkerTopologyContext;
 import org.apache.storm.tuple.Fields;
 import org.apache.storm.utils.ConfigUtils;
-import org.apache.storm.utils.ThriftTopologyUtils;
 import org.apache.storm.utils.Utils;
 import org.apache.storm.utils.ObjectReader;
-import org.apache.storm.utils.ThriftTopologyUtils;
 import org.json.simple.JSONValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -95,6 +94,9 @@ public class StormCommon {
     public static final String TOPOLOGY_METRICS_CONSUMER_EXPAND_MAP_TYPE = "expandMapType";
     public static final String TOPOLOGY_METRICS_CONSUMER_METRIC_NAME_SEPARATOR = "metricNameSeparator";
 
+    public static final String TOPOLOGY_EVENT_LOGGER_CLASS = "class";
+    public static final String TOPOLOGY_EVENT_LOGGER_ARGUMENTS = "arguments";
+
     @Deprecated
     public static String getStormId(final IStormClusterState stormClusterState, final String topologyName) {
         return stormClusterState.getTopoId(topologyName).get();
@@ -124,7 +126,7 @@ public class StormCommon {
         }
         return keys;
     }
-    
+
     private static void validateIds(StormTopology topology) throws InvalidTopologyException {
         List<String> componentIds = new ArrayList<>();
         componentIds.addAll(validateIds(topology.get_bolts()));
@@ -146,8 +148,7 @@ public class StormCommon {
     }
 
     public static Map<String, Object> allComponents(StormTopology topology) {
-        Map<String, Object> components = new HashMap<>();
-        components.putAll(topology.get_bolts());
+        Map<String, Object> components = new HashMap<>(topology.get_bolts());
         components.putAll(topology.get_spouts());
         components.putAll(topology.get_state_spouts());
         return components;
@@ -361,6 +362,9 @@ public class StormCommon {
     public static void addEventLogger(Map<String, Object> conf, StormTopology topology) {
         Integer numExecutors = ObjectReader.getInt(conf.get(Config.TOPOLOGY_EVENTLOGGER_EXECUTORS),
                 ObjectReader.getInt(conf.get(Config.TOPOLOGY_WORKERS)));
+        if (numExecutors==null || numExecutors==0) {
+            return;
+        }
         HashMap<String, Object> componentConf = new HashMap<>();
         componentConf.put(Config.TOPOLOGY_TASKS, numExecutors);
         componentConf.put(Config.TOPOLOGY_TICK_TUPLE_FREQ_SECS, ObjectReader.getInt(conf.get(Config.TOPOLOGY_MESSAGE_TIMEOUT_SECS)));
@@ -421,6 +425,7 @@ public class StormCommon {
                     classOccurrencesMap.put(className, occurrenceNum);
                     id = Constants.METRICS_COMPONENT_ID_PREFIX + className + "#" + occurrenceNum;
                 } else {
+                    id = Constants.METRICS_COMPONENT_ID_PREFIX + className;
                     classOccurrencesMap.put(className, 1);
                 }
                 metricsConsumerBolts.put(id, metricsConsumerBolt);
@@ -440,6 +445,7 @@ public class StormCommon {
     public static void addSystemComponents(Map<String, Object> conf, StormTopology topology) {
         Map<String, StreamInfo> outputStreams = new HashMap<>();
         outputStreams.put(Constants.SYSTEM_TICK_STREAM_ID, Thrift.outputFields(Arrays.asList("rate_secs")));
+        outputStreams.put(Constants.SYSTEM_FLUSH_STREAM_ID, Thrift.outputFields(Arrays.asList()));
         outputStreams.put(Constants.METRICS_TICK_STREAM_ID, Thrift.outputFields(Arrays.asList("interval")));
         outputStreams.put(Constants.CREDENTIALS_CHANGED_STREAM_ID, Thrift.outputFields(Arrays.asList("creds")));
 

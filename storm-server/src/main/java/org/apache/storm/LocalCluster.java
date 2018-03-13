@@ -15,6 +15,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.storm;
 
 import java.lang.reflect.Method;
@@ -31,10 +32,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.UnaryOperator;
-
 import org.apache.storm.blobstore.BlobStore;
 import org.apache.storm.cluster.ClusterStateContext;
 import org.apache.storm.cluster.ClusterUtils;
+import org.apache.storm.cluster.DaemonType;
 import org.apache.storm.cluster.IStateStorage;
 import org.apache.storm.cluster.IStormClusterState;
 import org.apache.storm.daemon.Acker;
@@ -43,6 +44,7 @@ import org.apache.storm.daemon.Shutdownable;
 import org.apache.storm.daemon.StormCommon;
 import org.apache.storm.daemon.nimbus.Nimbus;
 import org.apache.storm.daemon.nimbus.Nimbus.StandaloneINimbus;
+import org.apache.storm.daemon.nimbus.TopoCache;
 import org.apache.storm.daemon.supervisor.ReadClusterState;
 import org.apache.storm.daemon.supervisor.StandaloneSupervisor;
 import org.apache.storm.daemon.supervisor.Supervisor;
@@ -64,6 +66,7 @@ import org.apache.storm.generated.Nimbus.Iface;
 import org.apache.storm.generated.Nimbus.Processor;
 import org.apache.storm.generated.NimbusSummary;
 import org.apache.storm.generated.NotAliveException;
+import org.apache.storm.generated.OwnerResourceSummary;
 import org.apache.storm.generated.ProfileAction;
 import org.apache.storm.generated.ProfileRequest;
 import org.apache.storm.generated.ReadableBlobMeta;
@@ -75,6 +78,7 @@ import org.apache.storm.generated.SupervisorPageInfo;
 import org.apache.storm.generated.TopologyHistoryInfo;
 import org.apache.storm.generated.TopologyInfo;
 import org.apache.storm.generated.TopologyPageInfo;
+import org.apache.storm.generated.WorkerMetrics;
 import org.apache.storm.messaging.IContext;
 import org.apache.storm.messaging.local.Context;
 import org.apache.storm.nimbus.ILeaderElector;
@@ -91,12 +95,12 @@ import org.apache.storm.testing.TrackedTopology;
 import org.apache.storm.utils.ConfigUtils;
 import org.apache.storm.utils.DRPCClient;
 import org.apache.storm.utils.NimbusClient;
-import org.apache.storm.utils.Utils;
 import org.apache.storm.utils.ObjectReader;
 import org.apache.storm.utils.RegisteredGlobalState;
 import org.apache.storm.utils.StormCommonInstaller;
 import org.apache.storm.utils.Time;
 import org.apache.storm.utils.Time.SimulatedTime;
+import org.apache.storm.utils.Utils;
 import org.apache.thrift.TException;
 import org.json.simple.JSONValue;
 import org.json.simple.parser.ParseException;
@@ -107,10 +111,10 @@ import org.slf4j.LoggerFactory;
  * A stand alone storm cluster that runs inside a single process.
  * It is intended to be used for testing.  Both internal testing for
  * Apache Storm itself and for people building storm topologies.
- * 
+ *<p>
  * LocalCluster is an AutoCloseable so if you are using it in tests you can use
  * a try block to be sure it is shut down.
- * 
+ * </p>
  * try (LocalCluster cluster = new LocalCluster()) {
  *     // Do some tests
  * }
@@ -139,6 +143,7 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
         private boolean nimbusDaemon = false;
         private UnaryOperator<Nimbus> nimbusWrapper = null;
         private BlobStore store = null;
+        private TopoCache topoCache = null;
         private IStormClusterState clusterState = null;
         private ILeaderElector leaderElector = null;
         private String trackId = null;
@@ -156,7 +161,7 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
         }
         
         /**
-         * Set the number of slots/ports each supervisor should have
+         * Set the number of slots/ports each supervisor should have.
          */
         public Builder withPortsPerSupervisor(int portsPerSupervisor) {
             if (portsPerSupervisor < 0) {
@@ -177,7 +182,7 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
         }
         
         /**
-         * Add an single key/value config to the daemon conf
+         * Add an single key/value config to the daemon conf.
          */
         public Builder withDaemonConf(String key, Object value) {
             this.daemonConf.put(key, value);
@@ -277,7 +282,16 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
             this.store = store;
             return this;
         }
-        
+
+        /**
+         * Use the following topo cache instead of creating out own.
+         * This is intended mostly for internal testing with Mocks.
+         */
+        public Builder withTopoCache(TopoCache topoCache) {
+            this.topoCache = topoCache;
+            return this;
+        }
+
         /**
          * Use the following clusterState instead of the one in the config.
          * This is intended mostly for internal testing with Mocks.
@@ -318,6 +332,7 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
         }
         
         /**
+         * Builds a new LocalCluster.
          * @return the LocalCluster
          * @throws Exception on any one of many different errors.
          * This is intended for testing so yes it is ugly and throws Exception...
@@ -328,6 +343,7 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
     }
     
     private static class TrackedStormCommon extends StormCommon {
+
         private final String id;
         public TrackedStormCommon(String id) {
             this.id = id;
@@ -353,9 +369,10 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
     private final String trackId;
     private final StormCommonInstaller commonInstaller;
     private final SimulatedTime time;
+    private final NimbusClient.LocalOverride nimbusOverride;
     
     /**
-     * Create a default LocalCluster 
+     * Create a default LocalCluster.
      * @throws Exception on any error
      */
     public LocalCluster() throws Exception {
@@ -363,7 +380,7 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
     }
     
     /**
-     * Create a LocalCluster that connects to an existing Zookeeper instance
+     * Create a LocalCluster that connects to an existing Zookeeper instance.
      * @param zkHost the host for ZK
      * @param zkPort the port for ZK
      * @throws Exception on any error
@@ -420,17 +437,18 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
             this.daemonConf = new HashMap<>(conf);
         
             this.portCounter = new AtomicInteger(builder.supervisorSlotPortMin);
-            ClusterStateContext cs = new ClusterStateContext();
-            this.state = ClusterUtils.mkStateStorage(this.daemonConf, null, null, cs);
+            ClusterStateContext cs = new ClusterStateContext(DaemonType.NIMBUS, daemonConf);
+            this.state = ClusterUtils.mkStateStorage(this.daemonConf, null, cs);
             if (builder.clusterState == null) {
-                clusterState = ClusterUtils.mkStormClusterState(this.daemonConf, null, cs);
+                clusterState = ClusterUtils.mkStormClusterState(this.daemonConf, cs);
             } else {
                 this.clusterState = builder.clusterState;
             }
             //Set it for nimbus only
             conf.put(Config.STORM_LOCAL_DIR, nimbusTmp.getPath());
-            Nimbus nimbus = new Nimbus(conf, builder.inimbus == null ? new StandaloneINimbus() : builder.inimbus, 
-                this.getClusterState(), null, builder.store, builder.leaderElector, builder.groupMapper);
+            Nimbus nimbus = new Nimbus(conf, builder.inimbus == null ? new StandaloneINimbus() : builder.inimbus,
+                this.getClusterState(), null, builder.store, builder.topoCache, builder.leaderElector,
+                builder.groupMapper);
             if (builder.nimbusWrapper != null) {
                 nimbus = builder.nimbusWrapper.apply(nimbus);
             }
@@ -460,6 +478,13 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
             } catch (Exception e) {
                 //Ignore any exceptions we might be doing a test for authentication 
             }
+            if (thriftServer == null) {
+                //We don't want to override the client if there is a thrift server up and running, or we would not test any
+                // Of the actual thrift code
+                this.nimbusOverride = new NimbusClient.LocalOverride(this);
+            } else {
+                this.nimbusOverride = null;
+            }
             success = true;
         } finally {
             if (!success) {
@@ -467,7 +492,13 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
             }
         }
     }
-    
+
+    /**
+     * Checks if Nimbuses have elected a leader.
+     * @return boolean
+     * @throws AuthorizationException
+     * @throws TException
+     */
     private boolean hasLeader() throws AuthorizationException, TException {
         ClusterSummary summary = getNimbus().getClusterInfo();
         if (summary.is_set_nimbuses()) {
@@ -495,6 +526,7 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
     }
     
     public static final KillOptions KILL_NOW = new KillOptions();
+
     static {
         KILL_NOW.set_wait_secs(0);
     }
@@ -635,6 +667,9 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
 
     @Override
     public synchronized void close() throws Exception {
+        if (nimbusOverride != null) {
+            nimbusOverride.close();
+        }
         if (nimbus != null) {
             nimbus.shutdown();
         }
@@ -884,33 +919,33 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
     @Override
     public void setLogConfig(String name, LogConfig config) throws TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
     public LogConfig getLogConfig(String name) throws TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
     public void debug(String name, String component, boolean enable, double samplingPercentage)
             throws NotAliveException, AuthorizationException, TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
     public void setWorkerProfiler(String id, ProfileRequest profileRequest) throws TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
-    public List<ProfileRequest> getComponentPendingProfileActions(String id, String component_id, ProfileAction action)
+    public List<ProfileRequest> getComponentPendingProfileActions(String id, String componentId, ProfileAction action)
             throws TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
@@ -988,7 +1023,7 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
     @Override
     public void createStateInZookeeper(String key) throws TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
@@ -1020,7 +1055,7 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
     @Override
     public String getNimbusConf() throws AuthorizationException, TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
@@ -1037,44 +1072,45 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
     public TopologyInfo getTopologyInfoWithOpts(String id, GetInfoOptions options)
             throws NotAliveException, AuthorizationException, TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
     public TopologyPageInfo getTopologyPageInfo(String id, String window, boolean is_include_sys)
             throws NotAliveException, AuthorizationException, TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
     public SupervisorPageInfo getSupervisorPageInfo(String id, String host, boolean is_include_sys)
             throws NotAliveException, AuthorizationException, TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
     public ComponentPageInfo getComponentPageInfo(String topology_id, String component_id, String window,
             boolean is_include_sys) throws NotAliveException, AuthorizationException, TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
     public StormTopology getUserTopology(String id) throws NotAliveException, AuthorizationException, TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
 
     @Override
     public TopologyHistoryInfo getTopologyHistory(String user) throws AuthorizationException, TException {
         // TODO Auto-generated method stub
-        throw new RuntimeException("NOT IMPLMENETED YET");
+        throw new RuntimeException("NOT IMPLEMENTED YET");
     }
     
     /**
      * Run c with a local mode cluster overriding the NimbusClient and DRPCClient calls.
+     * NOTE local mode override happens by default now unless netty is turned on for the local cluster.
      * @param c the callable to run in this mode
      * @param ttlSec the number of seconds to let the cluster run after c has completed
      * @return the result of calling C
@@ -1083,7 +1119,6 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
     public static <T> T withLocalModeOverride(Callable<T> c, long ttlSec) throws Exception {
         LOG.info("\n\n\t\tSTARTING LOCAL MODE CLUSTER\n\n");
         try (LocalCluster local = new LocalCluster();
-                NimbusClient.LocalOverride nimbusOverride = new NimbusClient.LocalOverride(local);
                 LocalDRPC drpc = new LocalDRPC();
                 DRPCClient.LocalOverride drpcOverride = new DRPCClient.LocalOverride(drpc)) {
 
@@ -1095,7 +1130,18 @@ public class LocalCluster implements ILocalClusterTrackedTopologyAware, Iface {
             return ret;
         }
     }
-    
+
+    @Override
+    public List<OwnerResourceSummary> getOwnerResourceSummaries(String owner) throws AuthorizationException, TException {
+        // TODO Auto-generated method stub
+        throw new RuntimeException("NOT IMPLEMENTED YET");
+    }
+
+    @Override
+    public void processWorkerMetrics(WorkerMetrics metrics) throws org.apache.thrift.TException {
+        getNimbus().processWorkerMetrics(metrics);
+    }
+
     public static void main(final String [] args) throws Exception {
         if (args.length < 1) {
             throw new IllegalArgumentException("No class was specified to run");

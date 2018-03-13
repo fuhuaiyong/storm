@@ -20,6 +20,7 @@ package org.apache.storm.serialization;
 import org.apache.storm.Config;
 import org.apache.storm.generated.ComponentCommon;
 import org.apache.storm.generated.StormTopology;
+import org.apache.storm.messaging.netty.BackPressureStatus;
 import org.apache.storm.serialization.types.ArrayListSerializer;
 import org.apache.storm.serialization.types.HashMapSerializer;
 import org.apache.storm.serialization.types.HashSetSerializer;
@@ -72,6 +73,7 @@ public class SerializationFactory {
         k.register(org.apache.storm.metric.api.IMetricsConsumer.DataPoint.class);
         k.register(org.apache.storm.metric.api.IMetricsConsumer.TaskInfo.class);
         k.register(ConsList.class);
+        k.register(BackPressureStatus.class);
         
         synchronized (loader) {
             for (SerializationRegister sr: loader) {
@@ -83,31 +85,11 @@ public class SerializationFactory {
             }
         }
 
-        Map<String, String> registrations = normalizeKryoRegister(conf);
-
         kryoFactory.preRegister(k, conf);
 
         boolean skipMissing = (Boolean) conf.get(Config.TOPOLOGY_SKIP_MISSING_KRYO_REGISTRATIONS);
-        for(Map.Entry<String, String> entry: registrations.entrySet()) {
-            String serializerClassName = entry.getValue();
-            try {
-                Class klass = Class.forName(entry.getKey());
-                Class serializerClass = null;
-                if(serializerClassName!=null)
-                    serializerClass = Class.forName(serializerClassName);
-                if(serializerClass == null) {
-                    k.register(klass);
-                } else {
-                    k.register(klass, resolveSerializerInstance(k, klass, serializerClass, conf));
-                }
-            } catch (ClassNotFoundException e) {
-                if(skipMissing) {
-                    LOG.info("Could not find serialization or class for " + serializerClassName + ". Skipping registration...");
-                } else {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
+
+        register(k, conf.get(Config.TOPOLOGY_KRYO_REGISTER), conf, skipMissing);
 
         kryoFactory.postRegister(k, conf);
 
@@ -134,6 +116,34 @@ public class SerializationFactory {
         kryoFactory.postDecorate(k, conf);
 
         return k;
+    }
+
+    public static void register(Kryo k, List<String> classesToRegister) {
+        register(k, classesToRegister, Collections.emptyMap(), true);
+    }
+
+    public static void register(Kryo k, Object kryoRegistrations, Map<String, Object> conf, boolean skipMissing) {
+        Map<String, String> registrations = normalizeKryoRegister(kryoRegistrations);
+        for(Map.Entry<String, String> entry: registrations.entrySet()) {
+            String serializerClassName = entry.getValue();
+            try {
+                Class klass = Class.forName(entry.getKey());
+                Class serializerClass = null;
+                if(serializerClassName!=null)
+                    serializerClass = Class.forName(serializerClassName);
+                if(serializerClass == null) {
+                    k.register(klass);
+                } else {
+                    k.register(klass, resolveSerializerInstance(k, klass, serializerClass, conf));
+                }
+            } catch (ClassNotFoundException e) {
+                if(skipMissing) {
+                    LOG.info("Could not find serialization or class for " + serializerClassName + ". Skipping registration...");
+                } else {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
     }
 
     public static class IdDictionary {
@@ -223,15 +233,14 @@ public class SerializationFactory {
         }
     }
 
-    private static Map<String, String> normalizeKryoRegister(Map<String, Object> conf) {
+    private static Map<String, String> normalizeKryoRegister(Object kryoRegistrations) {
         // TODO: de-duplicate this logic with the code in nimbus
-        Object res = conf.get(Config.TOPOLOGY_KRYO_REGISTER);
-        if(res==null) return new TreeMap<>();
+        if(kryoRegistrations==null) return new TreeMap<>();
         Map<String, String> ret = new HashMap<>();
-        if(res instanceof Map) {
-            ret = (Map<String, String>) res;
+        if(kryoRegistrations instanceof Map) {
+            ret = (Map<String, String>) kryoRegistrations;
         } else {
-            for(Object o: (List) res) {
+            for(Object o: (List) kryoRegistrations) {
                 if(o instanceof Map) {
                     ret.putAll((Map) o);
                 } else {
